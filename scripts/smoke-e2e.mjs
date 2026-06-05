@@ -1,11 +1,11 @@
 /**
- * End-to-end smoke for v0.2 — drives the full RP → AS → auth-ui → AS → RP loop
- * with a real Authlete service, then exchanges the code and calls /userinfo to
- * verify user claims flow through.
+ * End-to-end smoke for v0.3 (mutual JWT) — drives the full
+ * RP → AS → auth-ui → AS → RP loop, then exchanges the code and calls
+ * /userinfo to verify the AS fetches live claims from auth-ui.
  *
- * Skips the actual server-action invocation (Next.js encoding is opaque from
- * outside) and instead reproduces what the server action does by calling
- * AS POST /api/interactions/{ticket} with synthesized session data.
+ * Skips the actual server-action invocation (Next.js encoding is opaque) and
+ * instead reproduces what the server action does by signing a decision JWT
+ * with auth-ui's key and POSTing it to AS /api/authorizations/{id}/decision.
  *
  * Usage:
  *   node --env-file=.env scripts/smoke-e2e.mjs
@@ -16,9 +16,10 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 const AS_BASE_URL = required("AS_BASE_URL");
 const AUTH_UI_BASE_URL = required("BETTER_AUTH_URL");
-const CLIENT_ID = required("AS_CLIENT_ID");
-const ALG = required("AS_CLIENT_KEY_ALG");
-const JWK = JSON.parse(required("AS_CLIENT_PRIVATE_KEY"));
+const AS_ISSUER_ID = process.env.AS_ISSUER_ID || AS_BASE_URL;
+const AUTH_UI_ISSUER_ID = process.env.AUTH_UI_ISSUER_ID || AUTH_UI_BASE_URL;
+const AUTH_UI_JWKS = JSON.parse(required("AUTH_UI_JWKS"));
+const SIGNING_JWK = AUTH_UI_JWKS.keys[0];
 
 const RP_CLIENT_ID = "2234376661";
 const RP_REDIRECT_URI = "http://localhost:4040";
@@ -45,26 +46,38 @@ function ok(label, value = "") {
   console.log(`  ✅ ${label}${value ? `: ${value}` : ""}`);
 }
 
-// 1) Sign up user via better-auth, capture session cookie
+// Sign a JWT addressed to the AS using auth-ui's interaction protocol key.
+async function signForAs(payload) {
+  const key = await importJWK(SIGNING_JWK, "ES256");
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "ES256", kid: SIGNING_JWK.kid, typ: "JWT" })
+    .setIssuer(AUTH_UI_ISSUER_ID)
+    .setSubject(AUTH_UI_ISSUER_ID)
+    .setAudience(AS_ISSUER_ID)
+    .setIssuedAt()
+    .setExpirationTime("60s")
+    .setJti(randomUUID())
+    .sign(key);
+}
+
+// 1) Sign up user via better-auth, capture session cookie + user id
 step(1, "Sign up user in auth-ui");
-const userId = randomUUID().slice(0, 8);
-const email = `e2e-${userId}@example.com`;
+const userTag = randomUUID().slice(0, 8);
+const email = `e2e-${userTag}@example.com`;
 const signUpRes = await fetch(`${AUTH_UI_BASE_URL}/api/auth/sign-up/email`, {
   method: "POST",
-  // better-auth's CSRF check requires Origin to match trustedOrigins.
   headers: { "content-type": "application/json", origin: AUTH_UI_BASE_URL },
-  body: JSON.stringify({ name: `E2E ${userId}`, email, password: "password12345" }),
+  body: JSON.stringify({ name: `E2E ${userTag}`, email, password: "password12345" }),
 });
-const setCookie = signUpRes.headers.getSetCookie();
-const session = setCookie.find((c) => c.startsWith("better-auth.session_token="));
-if (!session) {
-  console.error("No session cookie from sign-up", signUpRes.status, await signUpRes.text());
+const signUpBody = await signUpRes.json();
+const userId = signUpBody?.user?.id ?? signUpBody?.id;
+if (!userId) {
+  console.error("No user id from sign-up", signUpRes.status, JSON.stringify(signUpBody));
   process.exit(1);
 }
-const sessionCookie = session.split(";")[0];
-ok("Signed up", email);
+ok("Signed up", `${email} (id=${userId})`);
 
-// 2) Hit AS /authorize as the RP — capture interaction ticket from redirect
+// 2) RP → AS /authorize — capture authorization id from redirect to auth-ui
 step(2, "RP → AS /authorize");
 const codeVerifier = b64url(randomBytes(48));
 const codeChallenge = b64url(createHash("sha256").update(codeVerifier).digest());
@@ -75,75 +88,52 @@ const authzRes = await fetch(
   { redirect: "manual" },
 );
 const interactionUrl = authzRes.headers.get("location");
-const ticket = new URL(interactionUrl).searchParams.get("interaction");
-ok("Got ticket", ticket.slice(0, 16) + "…");
+const parsedUi = new URL(interactionUrl);
+// Path-based: /authorizations/<id>
+const idMatch = parsedUi.pathname.match(/^\/authorizations\/([^/]+)$/);
+if (!idMatch) {
+  console.error("Unexpected redirect from /oauth/authorize:", interactionUrl);
+  process.exit(1);
+}
+const authzId = decodeURIComponent(idMatch[1]);
+ok("Got authorization id", authzId.slice(0, 16) + "…");
 
-// 3) Mint auth-ui Bearer (private_key_jwt → access_token)
-step(3, "auth-ui mints Bearer for AS");
-const { issuer } = await fetch(`${AS_BASE_URL}/.well-known/openid-configuration`).then((r) =>
-  r.json(),
-);
-const key = await importJWK(JWK, ALG);
-const now = Math.floor(Date.now() / 1000);
-const assertion = await new SignJWT({})
-  .setProtectedHeader({ alg: ALG, kid: JWK.kid, typ: "JWT" })
-  .setIssuer(CLIENT_ID)
-  .setSubject(CLIENT_ID)
-  .setAudience(issuer)
-  .setIssuedAt(now)
-  .setExpirationTime(now + 60)
-  .setJti(randomUUID())
-  .sign(key);
-const tokRes = await fetch(`${AS_BASE_URL}/oauth/token`, {
-  method: "POST",
-  headers: { "content-type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({
-    grant_type: "client_credentials",
-    scope: "urn:authlete-as:interactions",
-    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-    client_assertion: assertion,
-  }),
-}).then((r) => r.json());
-const interactionsToken = tokRes.access_token;
-ok("auth-ui access token", interactionsToken.slice(0, 16) + "…");
-
-// 4) auth-ui submits decision to AS (mimics server action)
-step(4, "auth-ui POST /api/interactions/{ticket} with user_claims");
-const decisionBody = {
-  subject: `e2e-${userId}`,
+// 3) auth-ui POST /api/authorizations/{id}/decision — JWT-only, no body
+step(3, "auth-ui POST /api/authorizations/{id}/decision (signed JWT)");
+const decisionClaim = {
+  outcome: "approved",
+  subject: userId,
   amr: ["pwd"],
   authenticated_at: Math.floor(Date.now() / 1000),
   granted_scopes: ["openid", "profile", "email"],
   user_claims: {
-    name: `E2E ${userId}`,
+    sub: userId,
+    name: `E2E ${userTag}`,
     email,
     email_verified: false,
   },
 };
+const decisionJws = await signForAs({ authorization: authzId, decision: decisionClaim });
 const submitRes = await fetch(
-  `${AS_BASE_URL}/api/interactions/${encodeURIComponent(ticket)}`,
+  `${AS_BASE_URL}/api/authorizations/${encodeURIComponent(authzId)}/decision`,
   {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${interactionsToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(decisionBody),
+    headers: { authorization: `Bearer ${decisionJws}` },
   },
 );
 if (!submitRes.ok) {
   console.error("Decision submit failed", submitRes.status, await submitRes.text());
   process.exit(1);
 }
-const { redirect_to: finalizeUrl } = await submitRes.json();
-ok("redirect_to", finalizeUrl);
+const { redirect_to: resumeUrl } = await submitRes.json();
+ok("redirect_to", resumeUrl);
 
-// 5) Browser navigates to finalize → AS issues code → RP gets redirected
-step(5, "Browser → AS /finalize → RP redirect");
-const finalRes = await fetch(finalizeUrl, { redirect: "manual" });
+// 4) Browser → AS /authorizations/{id}/resume → RP redirect
+step(4, "Browser → /authorizations/{id}/resume → RP redirect");
+const finalRes = await fetch(resumeUrl, { redirect: "manual" });
 const rpUrl = finalRes.headers.get("location");
 if (!rpUrl) {
-  console.error("No location from finalize:", finalRes.status, await finalRes.text());
+  console.error("No location from /resume:", finalRes.status, await finalRes.text());
   process.exit(1);
 }
 const parsedRp = new URL(rpUrl);
@@ -153,8 +143,8 @@ ok("RP URL", rpUrl);
 ok("code", code?.slice(0, 16) + "…");
 ok("state matches", returnedState === state ? "yes" : "NO");
 
-// 6) RP exchanges code for tokens
-step(6, "RP /token exchange (PKCE)");
+// 5) RP exchanges code for tokens
+step(5, "RP /token exchange (PKCE)");
 const codeExchange = await fetch(`${AS_BASE_URL}/oauth/token`, {
   method: "POST",
   headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -174,17 +164,17 @@ ok("access_token", codeExchange.access_token.slice(0, 16) + "…");
 ok("id_token", codeExchange.id_token ? codeExchange.id_token.slice(0, 16) + "…" : "(none)");
 ok("scope", codeExchange.scope);
 
-// 7) RP calls /userinfo with the access token
-step(7, "RP /userinfo (the moment of truth for user_claims)");
+// 6) RP /userinfo — the AS fetches live claims from auth-ui
+step(6, "RP /userinfo (verifies AS → auth-ui live fetch)");
 const ui = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 }).then((r) => r.json());
 console.log("  Response body:", JSON.stringify(ui, null, 2));
-const ok7 = ui.sub && (ui.email === email || ui.name?.includes(userId));
-ok7 ? ok("user_claims round-tripped end-to-end") : console.error("  ❌ claims missing");
+const ok6 = ui.sub === userId && ui.email === email;
+ok6 ? ok("live claims round-tripped end-to-end") : console.error("  ❌ claims wrong or missing");
 
-// 8) Smoke /introspect with the token
-step(8, "RS introspects access_token via /oauth/introspect");
+// 7) /introspect
+step(7, "RS introspects access_token via /oauth/introspect");
 const introspectRes = await fetch(`${AS_BASE_URL}/oauth/introspect`, {
   method: "POST",
   headers: {
@@ -195,8 +185,8 @@ const introspectRes = await fetch(`${AS_BASE_URL}/oauth/introspect`, {
 }).then((r) => r.json());
 console.log("  Introspection:", JSON.stringify(introspectRes, null, 2));
 
-// 9) Smoke /revoke
-step(9, "RP revokes the access_token");
+// 8) /revoke
+step(8, "RP revokes the access_token");
 const revokeRes = await fetch(`${AS_BASE_URL}/oauth/revoke`, {
   method: "POST",
   headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -207,8 +197,8 @@ const revokeRes = await fetch(`${AS_BASE_URL}/oauth/revoke`, {
 });
 ok("revocation status", String(revokeRes.status));
 
-// 10) Verify revoked token no longer works
-step(10, "Confirm revoked token is rejected by /userinfo");
+// 9) Verify revoked token rejected
+step(9, "Confirm revoked token is rejected by /userinfo");
 const ui2 = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 });

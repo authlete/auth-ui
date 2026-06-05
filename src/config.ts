@@ -3,8 +3,7 @@
  * from here so the env surface is explicit and easy to audit.
  *
  * Required vars throw at module load — fail fast in dev, fail at boot in prod.
- * Vars only needed for Phase C onward (AS client integration) are read lazily
- * via `getAsClientConfig()` so Phases A and B can run without them.
+ * Interaction-protocol config is read lazily via `getInteractionProtocolConfig()`.
  */
 
 function required(name: string): string {
@@ -27,12 +26,18 @@ export const config = {
   nodeEnv: optional("NODE_ENV", "development"),
 } as const;
 
-export function getAsClientConfig() {
+export function getInteractionProtocolConfig() {
+  const authUiBase = required("BETTER_AUTH_URL");
+  const asBase = required("AS_BASE_URL");
   return {
-    asBaseUrl: required("AS_BASE_URL"),
-    clientId: required("AS_CLIENT_ID"),
-    clientPrivateKey: required("AS_CLIENT_PRIVATE_KEY"),
-    clientKeyAlg: optional("AS_CLIENT_KEY_ALG", "RS256"),
+    authUiIssuerId: optional("AUTH_UI_ISSUER_ID", authUiBase),
+    asIssuerId: optional("AS_ISSUER_ID", asBase),
+    asJwksUri: optional("AS_JWKS_URI", `${asBase}/oauth/jwks`),
+    authUiJwks: required("AUTH_UI_JWKS"),
+    signingKid: process.env.AUTH_UI_SIGNING_KID || undefined,
+    interactionChannel: optional("INTERACTION_CHANNEL", "backchannel") as
+      | "backchannel"
+      | "frontchannel",
   };
 }
 

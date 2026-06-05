@@ -1,6 +1,7 @@
 /**
- * Server actions for the interaction flow. Both call the AS and then issue
- * a Next.js `redirect()` (which throws NEXT_REDIRECT) to navigate the browser.
+ * Server actions for the authorization decision flow. Both call the AS and
+ * then issue a Next.js `redirect()` (which throws NEXT_REDIRECT) to navigate
+ * the browser to the AS's /resume.
  */
 
 "use server";
@@ -8,22 +9,22 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { submitInteraction } from "@/lib/as-client";
-import { signInUrlForInteraction } from "@/lib/interaction";
+import { submitDecision } from "@/lib/as-client";
+import { signInUrlForAuthorization } from "@/lib/authorization";
 
-function requireTicket(formData: FormData, action: string): string {
-  const ticket = formData.get("ticket");
-  if (typeof ticket !== "string" || ticket.length === 0) {
-    throw new Error(`${action}: missing ticket`);
+function requireAuthorizationId(formData: FormData, action: string): string {
+  const id = formData.get("authorization");
+  if (typeof id !== "string" || id.length === 0) {
+    throw new Error(`${action}: missing authorization id`);
   }
-  return ticket;
+  return id;
 }
 
-export async function approveInteraction(formData: FormData): Promise<void> {
-  const ticket = requireTicket(formData, "approveInteraction");
+export async function approveAuthorization(formData: FormData): Promise<void> {
+  const id = requireAuthorizationId(formData, "approveAuthorization");
 
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) redirect(signInUrlForInteraction(ticket));
+  if (!session?.user) redirect(signInUrlForAuthorization(id));
 
   const grantedScopes = formData.getAll("granted_scope").map((v) => String(v));
 
@@ -40,7 +41,7 @@ export async function approveInteraction(formData: FormData): Promise<void> {
     email_verified: session.user.emailVerified ?? false,
   };
 
-  const { redirect_to } = await submitInteraction(ticket, {
+  const { redirect_to } = await submitDecision(id, {
     outcome: "approved",
     subject: session.user.id,
     amr: ["pwd"],
@@ -52,10 +53,10 @@ export async function approveInteraction(formData: FormData): Promise<void> {
   redirect(redirect_to);
 }
 
-export async function denyInteraction(formData: FormData): Promise<void> {
-  const ticket = requireTicket(formData, "denyInteraction");
+export async function denyAuthorization(formData: FormData): Promise<void> {
+  const id = requireAuthorizationId(formData, "denyAuthorization");
 
-  const { redirect_to } = await submitInteraction(ticket, {
+  const { redirect_to } = await submitDecision(id, {
     outcome: "denied",
     error: "access_denied",
     error_description: "User denied the authorization request",

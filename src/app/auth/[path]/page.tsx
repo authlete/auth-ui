@@ -3,10 +3,10 @@
  * shadcn registry. Handles sign-in, sign-up, sign-out, forgot-password,
  * reset-password based on the path segment.
  *
- * Interaction-aware redirect: if `?interaction=<ticket>` is present, this
- * page wraps the auth view in <AuthRedirectOverride redirectTo=...> with the
- * interaction URL so post-sign-in navigation lands back at /?interaction=…
- * instead of the layout-level default.
+ * If `?next=<path>` is present (typically `/authorizations/<id>`), the page
+ * wraps the auth view in <AuthRedirectOverride next=...> so post-sign-in
+ * navigation lands back at the in-flight authorization page instead of the
+ * default home.
  */
 
 import { notFound } from "next/navigation";
@@ -14,9 +14,6 @@ import { Auth } from "@/components/auth/auth";
 import { AuthRedirectOverride } from "@/components/auth-redirect-override";
 import { SplitLayout } from "@/components/layouts/split-layout";
 
-// Mirrors better-auth-ui's `viewPaths.auth` so we can validate the segment
-// before rendering. List here to avoid pulling a server-only @better-auth-ui/core
-// import into a route file.
 const VALID_AUTH_PATHS = new Set([
   "sign-in",
   "sign-up",
@@ -27,19 +24,20 @@ const VALID_AUTH_PATHS = new Set([
 
 type PageProps = {
   params: Promise<{ path: string }>;
-  searchParams: Promise<{ interaction?: string }>;
+  searchParams: Promise<{ next?: string }>;
 };
 
 export default async function AuthPage({ params, searchParams }: PageProps) {
   const { path } = await params;
   if (!VALID_AUTH_PATHS.has(path)) notFound();
 
-  const { interaction } = await searchParams;
+  const { next } = await searchParams;
+  const inAuthorizationFlow = typeof next === "string" && next.length > 0;
   const view = (
     <SplitLayout
-      brandHeadline={interaction ? "Almost there." : "Welcome."}
+      brandHeadline={inAuthorizationFlow ? "Almost there." : "Welcome."}
       brandSubhead={
-        interaction
+        inAuthorizationFlow
           ? "Sign in to continue to the application that sent you here."
           : "Sign in or create an account to use Authlete-backed applications."
       }
@@ -48,8 +46,8 @@ export default async function AuthPage({ params, searchParams }: PageProps) {
     </SplitLayout>
   );
 
-  if (interaction) {
-    return <AuthRedirectOverride interaction={interaction}>{view}</AuthRedirectOverride>;
+  if (inAuthorizationFlow) {
+    return <AuthRedirectOverride next={next}>{view}</AuthRedirectOverride>;
   }
 
   return view;

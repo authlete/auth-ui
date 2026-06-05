@@ -1,7 +1,7 @@
 /**
  * Two-column auth shell: dark brand panel on the left, content on the right.
  *
- * Used by /auth/[path] and /?interaction=... Below `lg` the brand panel
+ * Used by /auth/[path] and /authorizations/[id]. Below `lg` the brand panel
  * collapses and the content takes the full viewport.
  */
 

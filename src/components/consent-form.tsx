@@ -2,11 +2,9 @@
  * Consent form — client component.
  *
  * Renders the upstream RP's identity + requested scopes with checkboxes
- * (default-checked, user can uncheck). Two submit buttons: Approve (uses
- * `approveInteraction` server action) and Deny (uses `denyInteraction`).
- *
- * Server actions are passed in via props rather than imported here so this
- * file stays purely UI; the server component owns the action binding.
+ * (default-checked, user can uncheck). Two submit buttons that invoke the
+ * approve / deny server actions passed in via props (kept out of this file
+ * so it stays pure UI; the server component owns the action binding).
  */
 
 "use client";
@@ -16,27 +14,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import type { InteractionClient, InteractionScope } from "@/lib/as-client";
-import { clientDisplayName } from "@/lib/interaction";
+import type { Client, Scope } from "@/lib/as-client";
+import { clientDisplayName } from "@/lib/authorization";
 
 type Props = {
-  ticket: string;
-  client: InteractionClient;
+  authorizationId: string;
+  client: Client;
   subject: string;
-  scopes: InteractionScope[];
+  scopes: Scope[];
   approveAction: (formData: FormData) => Promise<void>;
   denyAction: (formData: FormData) => Promise<void>;
 };
 
 export function ConsentForm({
-  ticket,
+  authorizationId,
   client,
   subject,
   scopes,
   approveAction,
   denyAction,
 }: Props) {
-  // Pre-check all requested scopes. Users can uncheck individual ones.
   const [granted, setGranted] = useState<Set<string>>(new Set(scopes.map((s) => s.name)));
 
   const toggle = (name: string) => {
@@ -97,13 +94,13 @@ export function ConsentForm({
       </CardContent>
       <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <form action={denyAction}>
-          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="authorization" value={authorizationId} />
           <Button type="submit" variant="outline" className="w-full sm:w-auto">
             Deny
           </Button>
         </form>
         <form action={approveAction}>
-          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="authorization" value={authorizationId} />
           {Array.from(granted).map((s) => (
             <input key={s} type="hidden" name="granted_scope" value={s} />
           ))}

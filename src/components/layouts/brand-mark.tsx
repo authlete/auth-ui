@@ -1,9 +1,4 @@
-/**
- * Square brand mark used across the AppShell and SplitLayout.
- * `variant` chooses a light gradient (for dark surfaces) or a darker gradient
- * (for light surfaces).
- */
-
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,18 +7,17 @@ type Props = {
 };
 
 export function BrandMark({ variant = "onLight", className }: Props) {
+  const src =
+    variant === "onDark"
+      ? "/brand/authlete-emblem-white.svg"
+      : "/brand/authlete-emblem-blue.svg";
   return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold",
-        variant === "onLight"
-          ? "bg-gradient-to-br from-indigo-500 to-sky-500 text-white"
-          : "bg-gradient-to-br from-indigo-400 to-sky-400 text-zinc-900",
-        className,
-      )}
-    >
-      A
-    </span>
+    <Image
+      src={src}
+      alt="Authlete"
+      width={24}
+      height={24}
+      className={cn("h-6 w-6", className)}
+    />
   );
 }

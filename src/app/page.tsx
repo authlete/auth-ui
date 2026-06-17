@@ -13,13 +13,14 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/comp
 import { SignedInHome } from "@/components/signed-in-home";
 import { AppShell } from "@/components/layouts/app-shell";
 import { SplitLayout } from "@/components/layouts/split-layout";
+import { activeBrand } from "@/brand/brand";
 
 export default async function Home() {
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (session?.user) {
     return (
-      <AppShell title="Home" description="Your auth-ui account." session={session}>
+      <AppShell title="Home" description={`Your ${activeBrand.productName} account.`} session={session}>
         <SignedInHome name={session.user.name} email={session.user.email} />
       </AppShell>
     );
@@ -29,7 +30,7 @@ export default async function Home() {
     <SplitLayout>
       <Card>
         <CardHeader>
-          <CardTitle>Welcome to auth-ui</CardTitle>
+          <CardTitle>Welcome to {activeBrand.productName}</CardTitle>
           <CardDescription>
             This is the authentication front-end. An OAuth application will
             redirect you here when it needs you to sign in.

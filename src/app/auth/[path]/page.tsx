@@ -33,15 +33,17 @@ export default async function AuthPage({ params, searchParams }: PageProps) {
 
   const { next } = await searchParams;
   const inAuthorizationFlow = typeof next === "string" && next.length > 0;
-  const view = (
+  // Direct visits use the brand's default panel copy; mid-flow visits get a
+  // short contextual override telling the user they're completing a request.
+  const view = inAuthorizationFlow ? (
     <SplitLayout
-      brandHeadline={inAuthorizationFlow ? "Almost there." : "Welcome."}
-      brandSubhead={
-        inAuthorizationFlow
-          ? "Sign in to continue to the application that sent you here."
-          : "Sign in or create an account to use Authlete-backed applications."
-      }
+      brandHeadline="Almost there."
+      brandSubhead="Sign in to continue to the application that sent you here."
     >
+      <Auth path={path} />
+    </SplitLayout>
+  ) : (
+    <SplitLayout>
       <Auth path={path} />
     </SplitLayout>
   );

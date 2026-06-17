@@ -10,6 +10,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth, type Session } from "@/lib/auth";
+import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
@@ -32,8 +33,8 @@ export async function AppShell({ children, title, description, session: sessionP
       <header className="border-b bg-background">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 text-sm font-medium tracking-tight">
-            <BrandMark variant="onLight" />
-            <span>auth-ui</span>
+            <BrandMark />
+            <span>{activeBrand.productName}</span>
           </Link>
           <div className="flex items-center gap-1">
             <ThemeToggle />

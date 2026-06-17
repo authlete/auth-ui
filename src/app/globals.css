@@ -43,10 +43,7 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --color-authlete-blue-1: #20477c;
-  --color-authlete-blue-2: #106cb6;
-  --color-authlete-yellow: #fbab01;
-  --color-authlete-black: #0c132a;
+  --color-brand-accent: var(--brand-accent);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -56,6 +53,11 @@ body {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Neutral, brand-agnostic base tokens. Brand-carrying tokens (--primary,
+ * --primary-foreground, --ring, --brand-accent, --brand-panel, --font-sans)
+ * are injected at the document root from src/brand — see brandCssVars.
+ */
 :root {
   --background: hsl(0 0% 100%);
   --foreground: hsl(222.2 84% 4.9%);
@@ -63,33 +65,30 @@ body {
   --card-foreground: hsl(222.2 84% 4.9%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(222.2 84% 4.9%);
-  --primary: hsl(215 59% 31%);
-  --primary-foreground: hsl(210 40% 98%);
   --secondary: hsl(210 40% 96.1%);
   --secondary-foreground: hsl(222.2 47.4% 11.2%);
   --muted: hsl(210 40% 96.1%);
   --muted-foreground: hsl(215.4 16.3% 46.9%);
-  --accent: hsl(41 99% 49%);
+  --accent: hsl(210 40% 96.1%);
   --accent-foreground: hsl(222.2 47.4% 11.2%);
   --destructive: hsl(0 84.2% 60.2%);
   --destructive-foreground: hsl(210 40% 98%);
   --border: hsl(214.3 31.8% 91.4%);
   --input: hsl(214.3 31.8% 91.4%);
-  --ring: hsl(215 59% 31%);
-  --chart-1: hsl(215 59% 31%);
-  --chart-2: hsl(210 60% 45%);
-  --chart-3: hsl(41 99% 49%);
-  --chart-4: hsl(215 25% 65%);
-  --chart-5: hsl(229 84% 5%);
+  --chart-1: hsl(215 25% 27%);
+  --chart-2: hsl(215 20% 45%);
+  --chart-3: hsl(215 16% 60%);
+  --chart-4: hsl(215 14% 75%);
+  --chart-5: hsl(215 12% 85%);
   --radius: 0.5rem;
   --sidebar: hsl(210 40% 98%);
   --sidebar-foreground: hsl(222.2 84% 4.9%);
-  --sidebar-primary: hsl(215 59% 31%);
+  --sidebar-primary: hsl(222.2 47.4% 11.2%);
   --sidebar-primary-foreground: hsl(210 40% 98%);
   --sidebar-accent: hsl(210 40% 96.1%);
   --sidebar-accent-foreground: hsl(222.2 47.4% 11.2%);
   --sidebar-border: hsl(214.3 31.8% 91.4%);
-  --sidebar-ring: hsl(215 59% 31%);
+  --sidebar-ring: hsl(215 20% 65%);
 }
 
 .dark {
@@ -99,8 +98,6 @@ body {
   --card-foreground: hsl(210 40% 98%);
   --popover: hsl(222.2 84% 4.9%);
   --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(41 99% 49%);
-  --primary-foreground: hsl(229 84% 5%);
   --secondary: hsl(217.2 32.6% 17.5%);
   --secondary-foreground: hsl(210 40% 98%);
   --muted: hsl(217.2 32.6% 17.5%);
@@ -111,29 +108,19 @@ body {
   --destructive-foreground: hsl(210 40% 98%);
   --border: hsl(217.2 32.6% 17.5%);
   --input: hsl(217.2 32.6% 17.5%);
-  --ring: hsl(41 99% 49%);
-  --chart-1: hsl(41 99% 49%);
-  --chart-2: hsl(210 60% 65%);
-  --chart-3: hsl(215 59% 51%);
-  --chart-4: hsl(215 25% 65%);
-  --chart-5: hsl(210 40% 98%);
+  --chart-1: hsl(210 40% 90%);
+  --chart-2: hsl(215 16% 70%);
+  --chart-3: hsl(215 18% 55%);
+  --chart-4: hsl(215 20% 40%);
+  --chart-5: hsl(215 25% 27%);
   --sidebar: hsl(222.2 84% 4.9%);
   --sidebar-foreground: hsl(210 40% 98%);
-  --sidebar-primary: hsl(41 99% 49%);
-  --sidebar-primary-foreground: hsl(229 84% 5%);
+  --sidebar-primary: hsl(210 40% 98%);
+  --sidebar-primary-foreground: hsl(222.2 47.4% 11.2%);
   --sidebar-accent: hsl(217.2 32.6% 17.5%);
   --sidebar-accent-foreground: hsl(210 40% 98%);
   --sidebar-border: hsl(217.2 32.6% 17.5%);
-  --sidebar-ring: hsl(41 99% 49%);
-}
-
-:root {
-  --gradient-authlete-brand: linear-gradient(
-    90deg,
-    var(--color-authlete-black) 0%,
-    var(--color-authlete-blue-1) 77%,
-    var(--color-authlete-blue-2) 100%
-  );
+  --sidebar-ring: hsl(215 20% 65%);
 }
 
 @layer base {

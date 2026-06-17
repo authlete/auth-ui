@@ -1,10 +1,18 @@
 # auth-ui
 
-The **login & consent application** in the *Externalized Login & Consent* pattern — paired with `authlete/typescript-oauth-server` (or any conforming Authlete-backed AS).
+A **white-label login & consent application** in the *Externalized Login & Consent* pattern — paired with `authlete/typescript-oauth-server` (or any conforming Authlete-backed AS).
 
 Built on **Next.js 16 · Tailwind 4 · Better Auth · better-sqlite3**.
 
 > The AS is the headless half of this pair. **auth-ui is the head** — every screen a user sees during sign-in or consent is rendered here.
+
+## White-label by design
+
+This app ships **unbranded** — the default look is a neutral reference UI, meant to be made yours.
+
+- **Rebrand from one file.** [`src/brand/brand.ts`](src/brand/brand.ts) is the single source of truth for product name, logo, font, colors, and sign-in panel copy. Colors flow into CSS variables; copy and assets are read from the active brand. No brand value is hardcoded elsewhere.
+- **Drop in your logo.** Set `logoMark` to an image under `/public/brand`, or keep the neutral built-in mark.
+- **Or replace the UI entirely.** Any app that speaks the same component protocol to the AS can stand in for this one — this repo is a working reference, not a requirement.
 
 ## The pattern: Externalized Login & Consent
 
@@ -15,40 +23,24 @@ Built on **Next.js 16 · Tailwind 4 · Better Auth · better-sqlite3**.
 | Component | Responsibility | What it sees |
 |---|---|---|
 | **Relying Party (RP)** | Initiates `/authorize`; receives code/tokens. | Only the AS. |
-| **Authorization Server (AS)** | OAuth/OIDC endpoints (`/authorize`, `/token`, `/userinfo`, `/par`, `/introspect`, `/revoke`, `/jwks`, `.well-known/*`). Delegates user-facing flow to the login app; owns the final redirect back to the RP. | RP, Authlete, login app — never external IdPs. |
-| **auth-ui (this app)** | Authenticates the user with any combination of factors (password, MFA, passkeys, federation); collects consent; records the decision against the opaque interaction ticket. | Only the opaque ticket id — no codes, no tokens, no RP `redirect_uri`s. |
-| **Authlete** | OAuth/OIDC protocol engine. Owns per-transaction state via tickets. | Never reachable from the browser; only the AS calls it. |
+| **Authorization Server (AS)** | OAuth/OIDC endpoints. Delegates the user-facing flow to auth-ui; owns the final redirect back to the RP. | RP, Authlete, auth-ui — never external IdPs. |
+| **auth-ui (this app)** | Authenticates the user with any combination of factors (password, MFA, passkeys, federation); collects consent; records the decision against the opaque authorization id. | Only the opaque authorization id — no codes, no tokens, no RP `redirect_uri`s. |
+| **Authlete** | OAuth/OIDC protocol engine. Owns per-transaction state. | Never reachable from the browser; only the AS calls it. |
 
-### State model
+### State and protocol
 
-- The **Authlete ticket** is the only handle for an in-flight authorization. Auth result, consent decision, and request context all hang off it on Authlete's side.
-- The **AS holds no per-transaction state**. The browser carries only the ticket id; the AS exchanges it back for context as needed. (One transitional exception is documented inline in the AS at `src/userstore.ts`.)
-- **auth-ui** holds the user session (Better Auth) but not the OAuth transaction. It learns what's being requested via `GET /api/interactions/{ticket}`, posts back the user's decision, and forwards the user to the AS for finalization.
-
-### Trust boundaries
-
-```
- ┌──────────┐    OAuth / OIDC    ┌──────────┐   component protocol    ┌──────────┐
- │   RP     │ ─────────────────→ │    AS    │ ───(bearer-auth)──────→ │ auth-ui  │
- └──────────┘                    │  (thin)  │                          │(this app)│
-                                 │          │   @authlete/sdk          │          │
-                                 │          │ ─────────────────→  Authlete         │
-                                 └──────────┘                          └─────┬────┘
-                                                                             │
-                                                  (future) federated IdPs · MFA · passkeys
-                                                                             │
-                                                                          External
-```
-
-- **AS outward to RPs**: standard OAuth/OIDC. One spec.
-- **AS ↔ auth-ui**: a bespoke 2-endpoint component protocol (`GET/POST /api/interactions/{ticket}`), bearer-authenticated. auth-ui obtains the bearer via `client_credentials` + `private_key_jwt`.
-- **auth-ui outward**: everything else — federated IdPs, MFA factors, passkeys, account management. None of this is visible to the AS.
+- The **AS holds no per-transaction state**; the browser carries only an opaque **authorization id**.
+- **auth-ui** holds the user session (Better Auth), not the OAuth transaction. It talks to the AS over a small component protocol authenticated by **per-request mutual JWT** (no bearer tokens):
+  - `GET  /api/authorizations/{id}` — fetch the in-flight authorization.
+  - `POST /api/authorizations/{id}/decision` — submit the user's approve/deny decision.
+  - `GET  /api/users/{id}` (on auth-ui) — the AS calls back to resolve user claims.
+  - `GET  /.well-known/jwks.json` (on auth-ui) — publishes auth-ui's public keys so the AS can verify those JWTs.
 
 ### Why this pattern
 
 - **Implementation-portable AS.** A thin Authlete client with no user state can run as a Node service, a sidecar, a reverse proxy plugin, or live inside an API gateway / edge worker. The same auth-ui works against any of them.
 - **Authentication evolves independently.** MFA, passkeys, federation, step-up, risk-based prompts — all in auth-ui, none of which the AS ever sees.
-- **Consent evolves independently.** Granular per-scope/per-claim UI, Rich Authorization Requests (RAR), persistent grant management — all UI work behind the same ticket interface.
+- **Consent evolves independently.** Granular per-scope/per-claim UI, Rich Authorization Requests (RAR), persistent grant management — all UI work behind the same authorization interface.
 - **Independent deploy and scale.** Two services, one narrow protocol between them.
 
 This separation matches the architecture Authlete is designed around: the engine owns the spec + per-transaction state; you own the user experience.
@@ -56,10 +48,10 @@ This separation matches the architecture Authlete is designed around: the engine
 ## What this app currently provides
 
 - Sign-in / sign-up / forgot-password (Better Auth — email + password today).
-- Consent surface against an in-flight AS ticket.
+- Consent surface for an in-flight AS authorization (`/authorizations/[id]`).
 - Account self-service: `/settings/account`, `/settings/security` via `better-auth-ui`.
 - Server-to-server client of the AS's component protocol (`src/lib/as-client.ts`).
-- Server actions that bridge user decisions back to the AS (`src/server/interaction-actions.ts`).
+- Server actions that bridge user decisions back to the AS (`src/server/authorization-actions.ts`).
 - End-to-end smoke harness (`scripts/smoke-e2e.mjs`).
 
 ## Run locally
@@ -68,7 +60,7 @@ This separation matches the architecture Authlete is designed around: the engine
 pnpm install
 cp .env.example .env
 # Fill in BETTER_AUTH_SECRET (32+ chars):   openssl rand -base64 32
-# Fill in AS_BASE_URL, AS_CLIENT_ID, AS_CLIENT_PRIVATE_KEY (matching the AS registration)
+# Fill in AS_BASE_URL, AS_JWKS_URI, AUTH_UI_JWKS — see .env.example for the full set
 pnpm dev
 ```
 

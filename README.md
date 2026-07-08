@@ -57,11 +57,12 @@ This separation matches the architecture Authlete is designed around: the engine
 ## Run locally
 
 ```bash
-pnpm install
+npm install
 cp .env.example .env
 # Fill in BETTER_AUTH_SECRET (32+ chars):   openssl rand -base64 32
 # Fill in AS_BASE_URL, AS_JWKS_URI, AUTH_UI_JWKS — see .env.example for the full set
-pnpm dev
+npx @better-auth/cli migrate   # create the SQLite schema at SQLITE_DB_PATH (./data ships in the repo)
+npm run dev
 ```
 
 Server boots at `http://localhost:3001`. The AS must be reachable at `AS_BASE_URL`.

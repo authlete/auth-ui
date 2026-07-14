@@ -12,7 +12,7 @@ This app ships **unbranded** — the default look is a neutral reference UI, mea
 
 - **Rebrand from one file.** [`src/brand/brand.ts`](src/brand/brand.ts) is the single source of truth for product name, logo, font, colors, and sign-in panel copy. Colors flow into CSS variables; copy and assets are read from the active brand. No brand value is hardcoded elsewhere.
 - **Drop in your logo.** Set `logoMark` to an image under `/public/brand`, or keep the neutral built-in mark.
-- **Or replace the UI entirely.** Any app that speaks the same component protocol to the AS can stand in for this one — this repo is a working reference, not a requirement.
+- **Or replace the UI entirely.** Any app that speaks the same Interaction Protocol to the AS can stand in for this one — this repo is a working reference, not a requirement.
 
 ## The pattern: Externalized Login & Consent
 
@@ -30,7 +30,7 @@ This app ships **unbranded** — the default look is a neutral reference UI, mea
 ### State and protocol
 
 - The **AS holds no per-transaction state**; the browser carries only an opaque **authorization id**.
-- **auth-ui** holds the user session (Better Auth), not the OAuth transaction. It talks to the AS over a small component protocol authenticated by **per-request mutual JWT** (no bearer tokens):
+- **auth-ui** holds the user session (Better Auth), not the OAuth transaction. It talks to the AS over the **Interaction Protocol** (specified in `INTERACTION_PROTOCOL.md` in the `typescript-oauth-server` repo), authenticated by **per-request mutual JWT** (no bearer tokens):
   - `GET  /api/authorizations/{id}` — fetch the in-flight authorization.
   - `POST /api/authorizations/{id}/decision` — submit the user's approve/deny decision.
   - `GET  /api/users/{id}` (on auth-ui) — the AS calls back to resolve user claims.
@@ -50,28 +50,47 @@ This separation matches the architecture Authlete is designed around: the engine
 - Sign-in / sign-up / forgot-password (Better Auth — email + password today).
 - Consent surface for an in-flight AS authorization (`/authorizations/[id]`).
 - Account self-service: `/settings/account`, `/settings/security` via `better-auth-ui`.
-- Server-to-server client of the AS's component protocol (`src/lib/as-client.ts`).
+- Server-to-server client of the AS's Interaction Protocol (`src/lib/as-client.ts`).
 - Server actions that bridge user decisions back to the AS (`src/server/authorization-actions.ts`).
 - End-to-end smoke harness (`scripts/smoke-e2e.mjs`).
+
+## Prerequisites
+
+- An **Authlete 3.0 service**, provisioned as described in the `typescript-oauth-server` README (service JWK Set registered, test RP client created).
+- The AS running and reachable at `AS_BASE_URL` (default `http://localhost:3000`).
 
 ## Run locally
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env
-# Fill in BETTER_AUTH_SECRET (32+ chars):   openssl rand -base64 32
-# Fill in AS_BASE_URL, AS_JWKS_URI, AUTH_UI_JWKS — see .env.example for the full set
-npx @better-auth/cli migrate   # create the SQLite schema at SQLITE_DB_PATH (./data ships in the repo)
-npm run dev
+# Fill in BETTER_AUTH_SECRET, AS_BASE_URL, AUTH_UI_JWKS — see .env.example
+# for the full set and key generation commands.
 ```
 
-Server boots at `http://localhost:3001`. The AS must be reachable at `AS_BASE_URL`.
+Create the SQLite schema once before first run. The migrate CLI does not read `.env`, so pass the vars inline:
 
-Run the end-to-end smoke against a running AS:
+```bash
+BETTER_AUTH_SECRET=<your-secret> BETTER_AUTH_URL=http://localhost:3001 pnpm exec better-auth migrate -y
+```
+
+Then start the dev server:
+
+```bash
+pnpm dev
+```
+
+Server boots at `http://localhost:3001`.
+
+## End-to-end smoke test
+
+`scripts/smoke-e2e.mjs` drives the full flow against a running AS and auth-ui: authorize → login → decision → code → token → userinfo → introspect → revoke.
 
 ```bash
 node --env-file=.env scripts/smoke-e2e.mjs
 ```
+
+Expect `E2E COMPLETE` at the end. Note the script exercises the protocol, not the UI: it signs up a user via API and signs the decision JWT itself instead of clicking through the login and consent screens.
 
 ## Roadmap
 

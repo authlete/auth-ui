@@ -9,3 +9,6 @@ data/*.sqlite-journal
 .DS_Store
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Local agent notes, not part of the reference implementation
+CLAUDE.md

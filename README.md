@@ -86,6 +86,8 @@ Server boots at `http://localhost:3001`.
 
 `scripts/smoke-e2e.mjs` drives the full flow against a running AS and auth-ui: authorize → login → decision → code → token → userinfo → introspect → revoke.
 
+Set `RP_CLIENT_ID` in `.env` to the test client registered on your Authlete service, then:
+
 ```bash
 node --env-file=.env scripts/smoke-e2e.mjs
 ```

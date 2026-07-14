@@ -9,6 +9,9 @@
  *
  * Usage:
  *   node --env-file=.env scripts/smoke-e2e.mjs
+ *
+ * Requires RP_CLIENT_ID in the env — the test RP client registered on the
+ * Authlete service (see .env.example).
  */
 
 import { SignJWT, importJWK } from "jose";
@@ -21,17 +24,22 @@ const AUTH_UI_ISSUER_ID = process.env.AUTH_UI_ISSUER_ID || AUTH_UI_BASE_URL;
 const AUTH_UI_JWKS = JSON.parse(required("AUTH_UI_JWKS"));
 const SIGNING_JWK = AUTH_UI_JWKS.keys[0];
 
-const RP_CLIENT_ID = "2234376661";
-const RP_REDIRECT_URI = "http://localhost:4040";
+const RP_CLIENT_ID = required("RP_CLIENT_ID");
+const RP_REDIRECT_URI = process.env.RP_REDIRECT_URI || "http://localhost:4040";
 const RP_SCOPE = "openid profile email";
 
 function required(name) {
   const v = process.env[name];
   if (!v) {
-    console.error(`Missing env var: ${name}`);
+    console.error(`Missing env var: ${name} (see .env.example)`);
     process.exit(1);
   }
   return v;
+}
+
+function fail(label, detail = "") {
+  console.error(`  ❌ ${label}${detail ? `: ${detail}` : ""}`);
+  process.exit(1);
 }
 
 function b64url(buf) {
@@ -140,8 +148,10 @@ const parsedRp = new URL(rpUrl);
 const code = parsedRp.searchParams.get("code");
 const returnedState = parsedRp.searchParams.get("state");
 ok("RP URL", rpUrl);
-ok("code", code?.slice(0, 16) + "…");
-ok("state matches", returnedState === state ? "yes" : "NO");
+if (!code) fail("no code in RP redirect", rpUrl);
+if (returnedState !== state) fail("state mismatch", `sent ${state}, got ${returnedState}`);
+ok("code", code.slice(0, 16) + "…");
+ok("state matches");
 
 // 5) RP exchanges code for tokens
 step(5, "RP /token exchange (PKCE)");
@@ -170,8 +180,8 @@ const ui = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 }).then((r) => r.json());
 console.log("  Response body:", JSON.stringify(ui, null, 2));
-const ok6 = ui.sub === userId && ui.email === email;
-ok6 ? ok("live claims round-tripped end-to-end") : console.error("  ❌ claims wrong or missing");
+if (ui.sub !== userId || ui.email !== email) fail("claims wrong or missing");
+ok("live claims round-tripped end-to-end");
 
 // 7) /introspect
 step(7, "RS introspects access_token via /oauth/introspect");
@@ -179,11 +189,16 @@ const introspectRes = await fetch(`${AS_BASE_URL}/oauth/introspect`, {
   method: "POST",
   headers: {
     "content-type": "application/x-www-form-urlencoded",
+    // The reference AS's introspection auth is a stub: it only checks that a
+    // Basic Authorization header is present (see typescript-oauth-server
+    // src/routes/introspect.ts), so any credentials work here.
     authorization: `Basic ${Buffer.from("rs:placeholder").toString("base64")}`,
   },
   body: new URLSearchParams({ token: codeExchange.access_token }),
 }).then((r) => r.json());
 console.log("  Introspection:", JSON.stringify(introspectRes, null, 2));
+if (introspectRes.active !== true) fail("introspection did not report the token active");
+ok("token reported active");
 
 // 8) /revoke
 step(8, "RP revokes the access_token");
@@ -195,6 +210,7 @@ const revokeRes = await fetch(`${AS_BASE_URL}/oauth/revoke`, {
     client_id: RP_CLIENT_ID,
   }),
 });
+if (!revokeRes.ok) fail("revocation failed", String(revokeRes.status));
 ok("revocation status", String(revokeRes.status));
 
 // 9) Verify revoked token rejected
@@ -202,6 +218,7 @@ step(9, "Confirm revoked token is rejected by /userinfo");
 const ui2 = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 });
-ok("status after revoke", String(ui2.status) + " (expecting 401)");
+if (ui2.status !== 401) fail("revoked token still accepted", `status ${ui2.status}`);
+ok("revoked token rejected", "401");
 
 console.log("\n══════════════════  E2E COMPLETE  ══════════════════\n");

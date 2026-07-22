@@ -1,109 +1,90 @@
 # auth-ui
 
-A **white-label login & consent application** in the *Externalized Login & Consent* pattern — paired with `authlete/typescript-oauth-server` (or any conforming Authlete-backed AS).
+White-label **login & consent UI** for an Authlete-backed OAuth/OIDC Authorization Server (e.g. [`authlete/typescript-oauth-server`](https://github.com/authlete/typescript-oauth-server)). The AS is headless; **auth-ui renders every screen the user sees** during sign-in and consent.
 
-Built on **Next.js 16 · Tailwind 4 · Better Auth · better-sqlite3**.
+Built on **Next.js 16 · Tailwind 4 · Better Auth · libSQL**.
 
-> The AS is the headless half of this pair. **auth-ui is the head** — every screen a user sees during sign-in or consent is rendered here.
+## Quickstart
 
-## White-label by design
-
-This app ships **unbranded** — the default look is a neutral reference UI, meant to be made yours.
-
-- **Rebrand from one file.** [`src/brand/brand.ts`](src/brand/brand.ts) is the single source of truth for product name, logo, font, colors, and sign-in panel copy. Colors flow into CSS variables; copy and assets are read from the active brand. No brand value is hardcoded elsewhere.
-- **Drop in your logo.** Set `logoMark` to an image under `/public/brand`, or keep the neutral built-in mark.
-- **Or replace the UI entirely.** Any app that speaks the same component protocol to the AS can stand in for this one — this repo is a working reference, not a requirement.
-
-## The pattern: Externalized Login & Consent
-
-**Intent.** Decouple user authentication and consent from the OAuth/OIDC Authorization Server. The AS stays a thin, spec-compliant surface; a separate UI application owns everything the user touches. The AS holds no per-transaction state.
-
-### Roles
-
-| Component | Responsibility | What it sees |
-|---|---|---|
-| **Relying Party (RP)** | Initiates `/authorize`; receives code/tokens. | Only the AS. |
-| **Authorization Server (AS)** | OAuth/OIDC endpoints. Delegates the user-facing flow to auth-ui; owns the final redirect back to the RP. | RP, Authlete, auth-ui — never external IdPs. |
-| **auth-ui (this app)** | Authenticates the user with any combination of factors (password, MFA, passkeys, federation); collects consent; records the decision against the opaque authorization id. | Only the opaque authorization id — no codes, no tokens, no RP `redirect_uri`s. |
-| **Authlete** | OAuth/OIDC protocol engine. Owns per-transaction state. | Never reachable from the browser; only the AS calls it. |
-
-### State and protocol
-
-- The **AS holds no per-transaction state**; the browser carries only an opaque **authorization id**.
-- **auth-ui** holds the user session (Better Auth), not the OAuth transaction. It talks to the AS over a small component protocol authenticated by **per-request mutual JWT** (no bearer tokens):
-  - `GET  /api/authorizations/{id}` — fetch the in-flight authorization.
-  - `POST /api/authorizations/{id}/decision` — submit the user's approve/deny decision.
-  - `GET  /api/users/{id}` (on auth-ui) — the AS calls back to resolve user claims.
-  - `GET  /.well-known/jwks.json` (on auth-ui) — publishes auth-ui's public keys so the AS can verify those JWTs.
-
-### Why this pattern
-
-- **Implementation-portable AS.** A thin Authlete client with no user state can run as a Node service, a sidecar, a reverse proxy plugin, or live inside an API gateway / edge worker. The same auth-ui works against any of them.
-- **Authentication evolves independently.** MFA, passkeys, federation, step-up, risk-based prompts — all in auth-ui, none of which the AS ever sees.
-- **Consent evolves independently.** Granular per-scope/per-claim UI, Rich Authorization Requests (RAR), persistent grant management — all UI work behind the same authorization interface.
-- **Independent deploy and scale.** Two services, one narrow protocol between them.
-
-This separation matches the architecture Authlete is designed around: the engine owns the spec + per-transaction state; you own the user experience.
-
-## What this app currently provides
-
-- Sign-in / sign-up / forgot-password (Better Auth — email + password today).
-- Consent surface for an in-flight AS authorization (`/authorizations/[id]`).
-- Account self-service: `/settings/account`, `/settings/security` via `better-auth-ui`.
-- Server-to-server client of the AS's component protocol (`src/lib/as-client.ts`).
-- Server actions that bridge user decisions back to the AS (`src/server/authorization-actions.ts`).
-- End-to-end smoke harness (`scripts/smoke-e2e.mjs`).
-
-## Run locally
+Runs fully locally against a local AS — no cloud services needed (libSQL is just a file in dev).
 
 ```bash
 git clone <repo> && cd auth-ui
 npm install
-cp .env.example .env
-# Fill in BETTER_AUTH_SECRET (32+ chars):   openssl rand -base64 32
-# Fill in AS_BASE_URL, AS_JWKS_URI, AUTH_UI_JWKS — see .env.example for the full set
-npm run migrate   # creates the local SQLite schema (data/auth-ui.sqlite)
-npm run dev
+cp .env.example .env    # fill BETTER_AUTH_SECRET, AS_JWKS_URI, AUTH_UI_JWKS (see comments)
+npm run migrate         # create the local SQLite schema (data/auth-ui.sqlite)
+npm run dev             # → http://localhost:3001
 ```
 
-Server boots at `http://localhost:3001`. The AS must be reachable at `AS_BASE_URL`.
-
-The store is **libSQL**: local dev uses a plain file (`DATABASE_URL=file:./data/auth-ui.sqlite`), so no external service is needed. Run the end-to-end smoke against a running AS:
+Needs a running AS reachable at `AS_BASE_URL` (default `http://localhost:3000`). End-to-end check against a running AS:
 
 ```bash
 node --env-file=.env scripts/smoke-e2e.mjs
 ```
 
-## Deploy to Vercel
+> **Channel note.** Only the **back-channel** (server-to-server) interaction mode is implemented today, so the AS and auth-ui must reach each other directly — which they do when both run locally. A **front-channel** (browser-mediated) mode, for split local/hosted setups, is **coming soon**.
 
-The app is Vercel-ready. The one requirement is a network database, since Vercel Functions have no persistent local filesystem — use a free [Turso](https://turso.tech) database (libSQL, same code path as local):
+## Configuration
 
-1. Create a Turso database and grab its URL + token.
-2. Set the environment variables in the Vercel project:
+`.env` — see `.env.example` for the full list and comments:
 
-| Variable | Value | Notes |
-|---|---|---|
-| `DATABASE_URL` | `libsql://<db>.turso.io` | the Turso database URL |
-| `DATABASE_AUTH_TOKEN` | Turso token | mark as Sensitive |
-| `BETTER_AUTH_SECRET` | 32+ char secret | Sensitive |
-| `BETTER_AUTH_URL` | your deployment https URL | must match the domain |
-| `AS_BASE_URL` / `AS_JWKS_URI` | public AS URLs | not localhost |
-| `AUTH_UI_JWKS` | ES256 private JWKS JSON | Sensitive |
+| Variable | Purpose |
+|---|---|
+| `BETTER_AUTH_SECRET` | session secret (`openssl rand -base64 32`) |
+| `BETTER_AUTH_URL` | this app's URL (default `http://localhost:3001`) |
+| `AS_BASE_URL` | where the AS is reachable (default `http://localhost:3000`) |
+| `AS_JWKS_URI` | the AS's public JWKS, used to verify its JWTs |
+| `AUTH_UI_JWKS` | this app's ES256 private JWKS (published, private fields stripped, at `/.well-known/jwks.json`) |
+| `DATABASE_URL` | libSQL target — a file locally, a Turso URL when hosted |
 
-3. Run `npm run migrate` once against the Turso database to create the schema (set `DATABASE_URL`/`DATABASE_AUTH_TOKEN` locally and run it, or use the Turso shell).
+## Deploy (hosted)
 
-Next.js is auto-detected; no `vercel.json` is required.
+Vercel-ready; Next.js is auto-detected (no `vercel.json`). The only requirement is a **network database** — serverless has no persistent local disk — so use a free [Turso](https://turso.tech) libSQL database. Same code path as local, just a remote target.
+
+**Turso** (same steps as local, remote target):
+- create a Turso account (free) and a database
+- put its URL + token in `.env` as `DATABASE_URL` (`libsql://…`) and `DATABASE_AUTH_TOKEN`
+- `npm run migrate` to populate the schema
+
+**Vercel env vars:** `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (your deploy URL), `AS_BASE_URL`, `AS_JWKS_URI`, `AUTH_UI_JWKS`. Mark the secrets Sensitive.
+
+Because back-channel is server-to-server, a hosted auth-ui needs an AS it can reach over the network (and the AS must reach it back). A hosted auth-ui can't talk to a localhost AS until front-channel lands.
+
+## White-label
+
+Ships unbranded. Rebrand from one file:
+
+- [`src/brand/brand.ts`](src/brand/brand.ts) is the single source of truth — product name, logo, font, colors, sign-in panel copy. Colors flow into CSS variables; nothing else hardcodes a brand value.
+- Set `logoMark` to an image in `/public/brand`, or keep the built-in neutral mark.
+- Or replace the UI entirely — anything that speaks the same protocol to the AS works.
+
+## How it works — Externalized Login & Consent
+
+Decouples authentication and consent from the AS. The AS stays a thin, spec-compliant OAuth/OIDC surface holding **no per-transaction state**; auth-ui owns everything the user touches.
+
+| Component | Role |
+|---|---|
+| **RP** | the app requesting access: starts `/authorize`, receives tokens. Integrates with the AS using standard OAuth/OIDC.|
+| **AS** | OAuth/OIDC endpoints; delegates login/consent to auth-ui; owns the redirect back to the RP |
+| **auth-ui** | the UI the user actually sees: authenticates the user, collects consent, records the decision against an opaque **authorization id** |
+| **Authlete** | protocol engine; owns per-transaction state; only the AS calls it |
+
+auth-ui holds the user session (Better Auth), not the OAuth transaction. It speaks a small component protocol to the AS, authenticated by **per-request mutual JWT** — each side publishes a JWKS and verifies the other:
+
+- `GET  /api/authorizations/{id}` — fetch the in-flight authorization (auth-ui → AS)
+- `POST /api/authorizations/{id}/decision` — submit approve/deny (auth-ui → AS)
+- `GET  /api/users/{id}` — resolve user claims (AS → auth-ui)
+- `GET  /.well-known/jwks.json` — auth-ui's public keys (AS → auth-ui)
+
+**Why:** the AS stays implementation-portable (Node service, sidecar, gateway, edge worker), while authentication (MFA, passkeys, federation) and consent (per-claim, RAR, grant management) evolve entirely in auth-ui — none of which the AS ever sees.
 
 ## Roadmap
 
-Authentication and consent grow here; the AS does not change for these.
-
-- **MFA** (TOTP, WebAuthn second-factor)
-- **Passkeys** (WebAuthn primary)
-- **Magic link**
-- **Federated sign-in** (Google, Microsoft, Okta, custom OIDC IdPs)
-- **Richer consent** — granular per-claim choices, RAR rendering, persistent grant management
-- **Account-recovery and step-up** flows
+- **Front-channel interaction mode** — browser-mediated; enables split local/hosted setups
+- **MFA** (TOTP, WebAuthn 2FA) · **Passkeys** · **Magic link**
+- **Federated sign-in** (Google, Microsoft, Okta, custom OIDC)
+- **Richer consent** — per-claim choices, RAR, persistent grant management
+- **Account recovery / step-up**
 
 ## License
 

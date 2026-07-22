@@ -57,21 +57,42 @@ This separation matches the architecture Authlete is designed around: the engine
 ## Run locally
 
 ```bash
+git clone <repo> && cd auth-ui
 npm install
 cp .env.example .env
 # Fill in BETTER_AUTH_SECRET (32+ chars):   openssl rand -base64 32
 # Fill in AS_BASE_URL, AS_JWKS_URI, AUTH_UI_JWKS — see .env.example for the full set
-npx @better-auth/cli migrate   # create the SQLite schema at SQLITE_DB_PATH (./data ships in the repo)
+npm run migrate   # creates the local SQLite schema (data/auth-ui.sqlite)
 npm run dev
 ```
 
 Server boots at `http://localhost:3001`. The AS must be reachable at `AS_BASE_URL`.
 
-Run the end-to-end smoke against a running AS:
+The store is **libSQL**: local dev uses a plain file (`DATABASE_URL=file:./data/auth-ui.sqlite`), so no external service is needed. Run the end-to-end smoke against a running AS:
 
 ```bash
 node --env-file=.env scripts/smoke-e2e.mjs
 ```
+
+## Deploy to Vercel
+
+The app is Vercel-ready. The one requirement is a network database, since Vercel Functions have no persistent local filesystem — use a free [Turso](https://turso.tech) database (libSQL, same code path as local):
+
+1. Create a Turso database and grab its URL + token.
+2. Set the environment variables in the Vercel project:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `DATABASE_URL` | `libsql://<db>.turso.io` | the Turso database URL |
+| `DATABASE_AUTH_TOKEN` | Turso token | mark as Sensitive |
+| `BETTER_AUTH_SECRET` | 32+ char secret | Sensitive |
+| `BETTER_AUTH_URL` | your deployment https URL | must match the domain |
+| `AS_BASE_URL` / `AS_JWKS_URI` | public AS URLs | not localhost |
+| `AUTH_UI_JWKS` | ES256 private JWKS JSON | Sensitive |
+
+3. Run `npm run migrate` once against the Turso database to create the schema (set `DATABASE_URL`/`DATABASE_AUTH_TOKEN` locally and run it, or use the Turso shell).
+
+Next.js is auto-detected; no `vercel.json` is required.
 
 ## Roadmap
 

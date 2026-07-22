@@ -21,7 +21,10 @@ export const config = {
   betterAuthSecret: required("BETTER_AUTH_SECRET"),
   betterAuthUrl: required("BETTER_AUTH_URL"),
   asBaseUrl: optional("AS_BASE_URL", "http://localhost:3000"),
-  sqliteDbPath: optional("SQLITE_DB_PATH", "./data/auth-ui.sqlite"),
+  // libSQL connection. Local dev uses a plain file; Vercel points this at a
+  // free Turso database. DATABASE_AUTH_TOKEN is only set for remote (Turso).
+  databaseUrl: optional("DATABASE_URL", "file:./data/auth-ui.sqlite"),
+  databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
   port: parseInt(optional("PORT", "3001"), 10),
   nodeEnv: optional("NODE_ENV", "development"),
 } as const;

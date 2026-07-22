@@ -15,14 +15,13 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   /**
    * Keep server-only packages external from Next's bundler:
-   *  - better-sqlite3: native module, not bundlable
+   *  - @libsql/*: native client, not bundlable
    *  - better-auth + @better-auth/*: avoids Turbopack statically analyzing
-   *    unused codepaths (e.g. the D1 SQLite dialect inside kysely-adapter
-   *    which has a known DEFAULT_MIGRATION_TABLE import that breaks under
-   *    static analysis but never runs at runtime when using better-sqlite3)
+   *    unused kysely-adapter codepaths (e.g. dialects for drivers we don't use)
    */
   serverExternalPackages: [
-    "better-sqlite3",
+    "@libsql/client",
+    "@libsql/kysely-libsql",
     "better-auth",
     "@better-auth/kysely-adapter",
     "@better-auth/core",

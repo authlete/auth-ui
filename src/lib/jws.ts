@@ -28,7 +28,6 @@ import {
   createRemoteJWKSet,
   importJWK,
   type JWTPayload,
-  type KeyLike,
 } from "jose";
 import { randomUUID } from "node:crypto";
 import { getInteractionProtocolConfig } from "@/config";
@@ -39,7 +38,8 @@ const JWKS_COOLDOWN_MS = 30 * 1000;
 const DEFAULT_EXP_SECONDS = 60;
 const CLOCK_TOLERANCE_SECONDS = 5;
 
-type ResolvedSigningKey = { key: KeyLike | Uint8Array; kid: string; alg: string };
+type SigningKey = Awaited<ReturnType<typeof importJWK>>;
+type ResolvedSigningKey = { key: SigningKey; kid: string; alg: string };
 
 let signingKeyPromise: Promise<ResolvedSigningKey> | undefined;
 let remoteAsJwks: ReturnType<typeof createRemoteJWKSet> | undefined;

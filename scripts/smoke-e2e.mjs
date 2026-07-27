@@ -18,7 +18,7 @@ const AS_BASE_URL = required("AS_BASE_URL");
 const AUTH_UI_BASE_URL = required("BETTER_AUTH_URL");
 // The AS's identity (JWT aud); defaults to the RP-facing base for single-tenant,
 // set explicitly to the AS origin for a multi-tenant host.
-const AS_URL = process.env.AS_URL || AS_BASE_URL;
+const AS_ISSUER_ID = process.env.AS_ISSUER_ID || AS_BASE_URL;
 const AUTH_UI_JWKS = JSON.parse(required("AUTH_UI_JWKS"));
 const SIGNING_JWK = AUTH_UI_JWKS.keys[0];
 
@@ -59,7 +59,7 @@ async function signForAs(payload) {
     .setProtectedHeader({ alg: "ES256", kid: SIGNING_JWK.kid, typ: "JWT" })
     .setIssuer(AUTH_UI_BASE_URL)
     .setSubject(AUTH_UI_BASE_URL)
-    .setAudience(AS_URL)
+    .setAudience(AS_ISSUER_ID)
     .setIssuedAt()
     .setExpirationTime("60s")
     .setJti(randomUUID())

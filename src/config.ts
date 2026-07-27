@@ -28,16 +28,16 @@ export const config = {
   nodeEnv: optional("NODE_ENV", "development"),
 } as const;
 
-// Two inputs: the AS's base URL (its identity, and the origin its JWKS is
-// derived from) and auth-ui's own signing key. auth-ui's identity is its own
-// base URL; the AS's callback base arrives per-request in the interaction token
-// (INTERACTION_PROTOCOL.md §1).
+// Two inputs: the AS's issuer id (its stable identity — the trust anchor, and the
+// origin its JWKS is fetched from) and auth-ui's own signing key. auth-ui's own
+// identity is its base URL. The AS's per-request callback URL rides the interaction
+// token (INTERACTION_PROTOCOL.md §1), not this config.
 export function getInteractionProtocolConfig() {
-  const asUrl = optional("AS_URL", "http://localhost:3000");
+  const asIssuerId = optional("AS_ISSUER_ID", "http://localhost:3000");
   return {
     authUiIssuerId: required("BETTER_AUTH_URL"),
-    asIssuerId: asUrl,
-    asJwksUri: `${asUrl}/.well-known/jwks.json`,
+    asIssuerId,
+    asJwksUri: `${asIssuerId}/.well-known/jwks.json`,
     authUiJwks: required("AUTH_UI_JWKS"),
   };
 }

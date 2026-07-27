@@ -19,6 +19,7 @@ import { clientDisplayName } from "@/lib/authorization";
 
 type Props = {
   authorizationId: string;
+  asBase: string;
   client: Client;
   subject: string;
   scopes: Scope[];
@@ -28,6 +29,7 @@ type Props = {
 
 export function ConsentForm({
   authorizationId,
+  asBase,
   client,
   subject,
   scopes,
@@ -95,12 +97,14 @@ export function ConsentForm({
       <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <form action={denyAction}>
           <input type="hidden" name="authorization" value={authorizationId} />
+          <input type="hidden" name="as_base" value={asBase} />
           <Button type="submit" variant="outline" className="w-full sm:w-auto">
             Deny
           </Button>
         </form>
         <form action={approveAction}>
           <input type="hidden" name="authorization" value={authorizationId} />
+          <input type="hidden" name="as_base" value={asBase} />
           {Array.from(granted).map((s) => (
             <input key={s} type="hidden" name="granted_scope" value={s} />
           ))}

@@ -4,7 +4,7 @@
  *   - signJwt: signs a JWT going to the AS using auth-ui's private
  *     key from AUTH_UI_JWKS (resolved by jwks.ts's key resolver).
  *   - verifyJwt: verifies a JWT received from the AS against the AS's
- *     published JWKS (fetched and cached at AS_JWKS_URI).
+ *     published JWKS (fetched from <AS_URL>/.well-known/jwks.json).
  *
  * Standard envelope claims (iss, sub, aud, iat, exp, jti) are applied per
  * INTERACTION_PROTOCOL.md §4. Per-operation claims are passed in as the payload.
@@ -49,10 +49,7 @@ async function getSigningKey(): Promise<ResolvedSigningKey> {
     signingKeyPromise = (async () => {
       const cfg = getInteractionProtocolConfig();
       const jwks = parseJwks(cfg.authUiJwks);
-      const jwk = resolveSigningKey(jwks, {
-        kid: cfg.signingKid,
-        alg: "ES256",
-      });
+      const jwk = resolveSigningKey(jwks, { alg: "ES256" });
       if (!jwk.kid) throw new Error("auth-ui signing JWK must include a kid");
       const key = await importJWK(jwk, jwk.alg ?? "ES256");
       return { key, kid: jwk.kid, alg: jwk.alg ?? "ES256" };
@@ -76,7 +73,7 @@ function getRemoteAsJwks() {
   return remoteAsJwks;
 }
 
-/** Sign a JWT addressed to the AS (audience = AS_ISSUER_ID by default). */
+/** Sign a JWT addressed to the AS (audience = the AS's identity by default). */
 export async function signJwt(
   payload: Record<string, unknown>,
   opts: { audience?: string; expiresInSeconds?: number } = {},

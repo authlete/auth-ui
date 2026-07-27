@@ -7,8 +7,7 @@
  */
 
 import "server-only";
-import { signJwt } from "./jws";
-import { config } from "@/config";
+import { signJwt, verifyJwt } from "./jws";
 import { authorizationApiPath, authorizationDecisionApiPath } from "./authorization";
 
 export type Client = {
@@ -64,14 +63,29 @@ export class AuthorizationNotFoundError extends Error {
   }
 }
 
+/**
+ * Verify the AS interaction token (INTERACTION_PROTOCOL.md §1) and return the
+ * callback base it carries — the one place `asBase` is trust-checked.
+ */
+export async function verifyInteraction(interaction: string, id: string): Promise<string> {
+  const payload = await verifyJwt(interaction);
+  if (payload.authorization !== id) throw new AuthorizationNotFoundError(id);
+  const asBase = payload.as_base;
+  if (typeof asBase !== "string" || asBase.length === 0) {
+    throw new Error("interaction token missing as_base");
+  }
+  return asBase;
+}
+
 async function asFetch(
+  asBase: string,
   path: string,
   payload: Record<string, unknown>,
   authorizationId: string,
   init: RequestInit = {},
 ): Promise<Response> {
   const jwt = await signJwt(payload);
-  const res = await fetch(`${config.asBaseUrl}${path}`, {
+  const res = await fetch(`${asBase}${path}`, {
     ...init,
     headers: {
       ...init.headers,
@@ -85,18 +99,20 @@ async function asFetch(
   return res;
 }
 
-export async function getAuthorization(id: string): Promise<AuthorizationDetails> {
-  const res = await asFetch(authorizationApiPath(id), { authorization: id }, id);
+export async function getAuthorization(asBase: string, id: string): Promise<AuthorizationDetails> {
+  const res = await asFetch(asBase, authorizationApiPath(id), { authorization: id }, id);
   return (await res.json()) as AuthorizationDetails;
 }
 
 export async function submitDecision(
+  asBase: string,
   id: string,
   decision: Decision,
 ): Promise<{ redirect_to: string }> {
   // The decision lives in the JWT claims, not in an HTTP body — the signature
   // binds the decision to this request.
   const res = await asFetch(
+    asBase,
     authorizationDecisionApiPath(id),
     { authorization: id, decision },
     id,

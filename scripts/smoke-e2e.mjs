@@ -16,14 +16,15 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 const AS_BASE_URL = required("AS_BASE_URL");
 const AUTH_UI_BASE_URL = required("BETTER_AUTH_URL");
-const AS_ISSUER_ID = process.env.AS_ISSUER_ID || AS_BASE_URL;
-const AUTH_UI_ISSUER_ID = process.env.AUTH_UI_ISSUER_ID || AUTH_UI_BASE_URL;
+// The AS's identity (JWT aud); defaults to the RP-facing base for single-tenant,
+// set explicitly to the AS origin for a multi-tenant host.
+const AS_URL = process.env.AS_URL || AS_BASE_URL;
 const AUTH_UI_JWKS = JSON.parse(required("AUTH_UI_JWKS"));
 const SIGNING_JWK = AUTH_UI_JWKS.keys[0];
 
-const RP_CLIENT_ID = "2234376661";
-const RP_REDIRECT_URI = "http://localhost:4040";
-const RP_SCOPE = "openid profile email";
+const RP_CLIENT_ID = process.env.RP_CLIENT_ID || "2234376661";
+const RP_REDIRECT_URI = process.env.RP_REDIRECT_URI || "http://localhost:4040";
+const RP_SCOPE = process.env.RP_SCOPE || "openid profile email";
 
 function required(name) {
   const v = process.env[name];
@@ -36,6 +37,11 @@ function required(name) {
 
 function b64url(buf) {
   return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function decodeJwtPayload(jwt) {
+  const payload = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+  return JSON.parse(Buffer.from(payload, "base64").toString());
 }
 
 function step(n, label) {
@@ -51,9 +57,9 @@ async function signForAs(payload) {
   const key = await importJWK(SIGNING_JWK, "ES256");
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "ES256", kid: SIGNING_JWK.kid, typ: "JWT" })
-    .setIssuer(AUTH_UI_ISSUER_ID)
-    .setSubject(AUTH_UI_ISSUER_ID)
-    .setAudience(AS_ISSUER_ID)
+    .setIssuer(AUTH_UI_BASE_URL)
+    .setSubject(AUTH_UI_BASE_URL)
+    .setAudience(AS_URL)
     .setIssuedAt()
     .setExpirationTime("60s")
     .setJti(randomUUID())
@@ -89,7 +95,7 @@ const authzRes = await fetch(
 );
 const interactionUrl = authzRes.headers.get("location");
 const parsedUi = new URL(interactionUrl);
-// Path-based: /authorizations/<id>
+// Path-based: /authorizations/<id>?interaction=<jwt>
 const idMatch = parsedUi.pathname.match(/^\/authorizations\/([^/]+)$/);
 if (!idMatch) {
   console.error("Unexpected redirect from /oauth/authorize:", interactionUrl);
@@ -97,6 +103,20 @@ if (!idMatch) {
 }
 const authzId = decodeURIComponent(idMatch[1]);
 ok("Got authorization id", authzId.slice(0, 16) + "…");
+
+// The AS callback base rides the signed interaction token, not static config.
+const interaction = parsedUi.searchParams.get("interaction");
+if (!interaction) {
+  console.error("No interaction token in redirect:", interactionUrl);
+  process.exit(1);
+}
+const interactionClaims = decodeJwtPayload(interaction);
+const asBase = interactionClaims.as_base;
+if (interactionClaims.authorization !== authzId || !asBase) {
+  console.error("Bad interaction token:", JSON.stringify(interactionClaims));
+  process.exit(1);
+}
+ok("interaction as_base", asBase);
 
 // 3) auth-ui POST /api/authorizations/{id}/decision — JWT-only, no body
 step(3, "auth-ui POST /api/authorizations/{id}/decision (signed JWT)");
@@ -115,7 +135,7 @@ const decisionClaim = {
 };
 const decisionJws = await signForAs({ authorization: authzId, decision: decisionClaim });
 const submitRes = await fetch(
-  `${AS_BASE_URL}/api/authorizations/${encodeURIComponent(authzId)}/decision`,
+  `${asBase}/api/authorizations/${encodeURIComponent(authzId)}/decision`,
   {
     method: "POST",
     headers: { authorization: `Bearer ${decisionJws}` },

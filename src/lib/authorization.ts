@@ -14,8 +14,11 @@ export function authorizationEntryPath(id: string): string {
 }
 
 /** Sign-in URL that returns the user to the in-flight authorization once authed. */
-export function signInUrlForAuthorization(id: string): string {
-  return `/auth/sign-in?${AUTHORIZATION_RETURN_PARAM}=${encodeURIComponent(authorizationEntryPath(id))}`;
+export function signInUrlForAuthorization(id: string, interaction?: string): string {
+  const entry = interaction
+    ? `${authorizationEntryPath(id)}?interaction=${encodeURIComponent(interaction)}`
+    : authorizationEntryPath(id);
+  return `/auth/sign-in?${AUTHORIZATION_RETURN_PARAM}=${encodeURIComponent(entry)}`;
 }
 
 /** AS API path: fetch the in-flight authorization. */

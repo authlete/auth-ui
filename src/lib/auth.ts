@@ -25,7 +25,7 @@ export const auth = betterAuth({
   advanced: {
     useSecureCookies: config.nodeEnv === "production",
   },
-  trustedOrigins: [config.betterAuthUrl, config.asBaseUrl],
+  trustedOrigins: [config.betterAuthUrl],
   plugins: [nextCookies()],
 });
 

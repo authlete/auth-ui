@@ -12,16 +12,17 @@ import { auth } from "@/lib/auth";
 import { submitDecision } from "@/lib/as-client";
 import { signInUrlForAuthorization } from "@/lib/authorization";
 
-function requireAuthorizationId(formData: FormData, action: string): string {
-  const id = formData.get("authorization");
-  if (typeof id !== "string" || id.length === 0) {
-    throw new Error(`${action}: missing authorization id`);
+function requireField(formData: FormData, field: string, action: string): string {
+  const v = formData.get(field);
+  if (typeof v !== "string" || v.length === 0) {
+    throw new Error(`${action}: missing ${field}`);
   }
-  return id;
+  return v;
 }
 
 export async function approveAuthorization(formData: FormData): Promise<void> {
-  const id = requireAuthorizationId(formData, "approveAuthorization");
+  const id = requireField(formData, "authorization", "approveAuthorization");
+  const asBase = requireField(formData, "as_base", "approveAuthorization");
 
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) redirect(signInUrlForAuthorization(id));
@@ -41,7 +42,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
     email_verified: session.user.emailVerified ?? false,
   };
 
-  const { redirect_to } = await submitDecision(id, {
+  const { redirect_to } = await submitDecision(asBase, id, {
     outcome: "approved",
     subject: session.user.id,
     amr: ["pwd"],
@@ -54,9 +55,10 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
 }
 
 export async function denyAuthorization(formData: FormData): Promise<void> {
-  const id = requireAuthorizationId(formData, "denyAuthorization");
+  const id = requireField(formData, "authorization", "denyAuthorization");
+  const asBase = requireField(formData, "as_base", "denyAuthorization");
 
-  const { redirect_to } = await submitDecision(id, {
+  const { redirect_to } = await submitDecision(asBase, id, {
     outcome: "denied",
     error: "access_denied",
     error_description: "User denied the authorization request",

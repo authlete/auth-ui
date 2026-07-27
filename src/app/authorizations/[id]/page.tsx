@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
   getAuthorization,
+  verifyInteraction,
   AuthorizationNotFoundError,
   type AuthorizationDetails,
   type Scope,
@@ -27,10 +28,22 @@ import { clientDisplayName, signInUrlForAuthorization } from "@/lib/authorizatio
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ interaction?: string }>;
 };
 
-export default async function AuthorizationPage({ params }: PageProps) {
+export default async function AuthorizationPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { interaction } = await searchParams;
+  if (!interaction) return renderExpired();
+
+  // The interaction token carries the AS callback base. Verify it once here; the
+  // resulting asBase then flows to the fetch and (via the form) to the decision.
+  let asBase: string;
+  try {
+    asBase = await verifyInteraction(interaction, id);
+  } catch {
+    return renderExpired();
+  }
 
   // Read headers once, then fan out session lookup and AS fetch in parallel.
   const reqHeaders = await headers();
@@ -38,7 +51,7 @@ export default async function AuthorizationPage({ params }: PageProps) {
   let session: Awaited<ReturnType<typeof auth.api.getSession>>;
   try {
     [details, session] = await Promise.all([
-      getAuthorization(id),
+      getAuthorization(asBase, id),
       auth.api.getSession({ headers: reqHeaders }),
     ]);
   } catch (err) {
@@ -49,12 +62,12 @@ export default async function AuthorizationPage({ params }: PageProps) {
   const needsReauth =
     (details.needs.includes("authentication") && !session?.user) ||
     shouldForceReauth(details, session);
-  if (needsReauth) redirect(signInUrlForAuthorization(id));
+  if (needsReauth) redirect(signInUrlForAuthorization(id, interaction));
 
   // prompt=none — AS would have skipped UI if it had session info. Bridge by
   // auto-approving with the current session; the server action redirects.
   if (details.skip && session?.user) {
-    await approveAuthorization(buildSkipFormData(id, details.requested_scopes));
+    await approveAuthorization(buildSkipFormData(id, asBase, details.requested_scopes));
     return null;
   }
 
@@ -65,6 +78,7 @@ export default async function AuthorizationPage({ params }: PageProps) {
     >
       <ConsentForm
         authorizationId={id}
+        asBase={asBase}
         client={details.client}
         subject={session?.user.email ?? session?.user.id ?? ""}
         scopes={details.requested_scopes}
@@ -107,9 +121,10 @@ function shouldForceReauth(
   return false;
 }
 
-function buildSkipFormData(id: string, scopes: Scope[]): FormData {
+function buildSkipFormData(id: string, asBase: string, scopes: Scope[]): FormData {
   const fd = new FormData();
   fd.set("authorization", id);
+  fd.set("as_base", asBase);
   for (const s of scopes) fd.append("granted_scope", s.name);
   return fd;
 }

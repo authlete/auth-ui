@@ -20,7 +20,6 @@ function optional(name: string, fallback: string): string {
 export const config = {
   betterAuthSecret: required("BETTER_AUTH_SECRET"),
   betterAuthUrl: required("BETTER_AUTH_URL"),
-  asBaseUrl: optional("AS_BASE_URL", "http://localhost:3000"),
   // libSQL connection. Local dev uses a plain file; Vercel points this at a
   // free Turso database. DATABASE_AUTH_TOKEN is only set for remote (Turso).
   databaseUrl: optional("DATABASE_URL", "file:./data/auth-ui.sqlite"),
@@ -29,18 +28,17 @@ export const config = {
   nodeEnv: optional("NODE_ENV", "development"),
 } as const;
 
+// Two inputs: the AS's base URL (its identity, and the origin its JWKS is
+// derived from) and auth-ui's own signing key. auth-ui's identity is its own
+// base URL; the AS's callback base arrives per-request in the interaction token
+// (INTERACTION_PROTOCOL.md §1).
 export function getInteractionProtocolConfig() {
-  const authUiBase = required("BETTER_AUTH_URL");
-  const asBase = required("AS_BASE_URL");
+  const asUrl = optional("AS_URL", "http://localhost:3000");
   return {
-    authUiIssuerId: optional("AUTH_UI_ISSUER_ID", authUiBase),
-    asIssuerId: optional("AS_ISSUER_ID", asBase),
-    asJwksUri: optional("AS_JWKS_URI", `${asBase}/oauth/jwks`),
+    authUiIssuerId: required("BETTER_AUTH_URL"),
+    asIssuerId: asUrl,
+    asJwksUri: `${asUrl}/.well-known/jwks.json`,
     authUiJwks: required("AUTH_UI_JWKS"),
-    signingKid: process.env.AUTH_UI_SIGNING_KID || undefined,
-    interactionChannel: optional("INTERACTION_CHANNEL", "backchannel") as
-      | "backchannel"
-      | "frontchannel",
   };
 }
 

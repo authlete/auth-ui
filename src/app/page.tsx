@@ -10,7 +10,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { SignedInHome } from "@/components/signed-in-home";
+import { AccountSettings } from "@/components/auth/settings/account/account-settings";
 import { AppShell } from "@/components/layouts/app-shell";
 import { SplitLayout } from "@/components/layouts/split-layout";
 import { activeBrand } from "@/brand/brand";
@@ -19,9 +19,12 @@ export default async function Home() {
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (session?.user) {
+    // Signed-in home is the native better-auth-ui account surface (profile,
+    // email, and the multi-session accounts card). It renders client-side from
+    // the session, so switching accounts updates it live — no stale reload.
     return (
-      <AppShell title="Home" description={`Your ${activeBrand.productName} account.`} session={session}>
-        <SignedInHome name={session.user.name} email={session.user.email} />
+      <AppShell title="Account" description="Manage your profile and signed-in accounts." session={session}>
+        <AccountSettings />
       </AppShell>
     );
   }

@@ -84,6 +84,23 @@ test("native redirectTo returns the user to the requested page after sign-in", a
   await expect(page).toHaveURL(/\/settings\/security/, { timeout: 15_000 });
 });
 
+test("redirectTo survives switching from sign-in to sign-up", async ({ page }) => {
+  // Arriving from an authorization flow, then switching to the sign-up view,
+  // must keep the redirect target (else the user is stranded on auth-ui).
+  const target = "/settings/security";
+  await page.goto(`/auth/sign-in?redirectTo=${encodeURIComponent(target)}`);
+  await page.getByRole("link", { name: "Sign Up" }).click();
+  await expect(page).toHaveURL(/\/auth\/sign-up\?redirectTo=/);
+  expect(decodeURIComponent(page.url())).toContain(target);
+
+  const email = uniqueEmail();
+  await page.fill("input[name=name]", "Redirect Link");
+  await page.fill("input[name=email]", email);
+  await page.fill("input[name=password]", PASSWORD);
+  await page.click("button[type=submit]");
+  await expect(page).toHaveURL(/\/settings\/security/, { timeout: 15_000 });
+});
+
 test("multi-session: add a second account, switch on sign-out, redirect on final sign-out", async ({
   page,
 }) => {

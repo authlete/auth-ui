@@ -10,7 +10,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider, useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import type { SocialProvider } from "better-auth/social-providers";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { multiSessionPlugin } from "@/lib/auth/multi-session-plugin";
@@ -18,6 +18,34 @@ import { themePlugin } from "@/lib/auth/theme-plugin";
 import { twoFactorPlugin } from "@/lib/auth/two-factor-plugin";
 import { authClient } from "@/lib/auth-client";
 import { getQueryClient } from "@/lib/query-client";
+
+const noopSubscribe = () => () => {};
+const readRedirectTo = () => new URLSearchParams(window.location.search).get("redirectTo");
+
+// better-auth-ui's auth-view links (sign-in ↔ sign-up ↔ forgot-password) are
+// bare paths, dropping ?redirectTo. Carry it across them so an in-flight
+// authorization (or any post-login target) survives switching views.
+function AuthLink({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  to?: string;
+  className?: string;
+  children?: ReactNode;
+}) {
+  const redirectTo = useSyncExternalStore(noopSubscribe, readRedirectTo, () => null);
+  const target =
+    redirectTo && href.startsWith("/auth/") && !href.includes("?")
+      ? `${href}?redirectTo=${encodeURIComponent(redirectTo)}`
+      : href;
+  return (
+    <Link href={target} className={className}>
+      {children}
+    </Link>
+  );
+}
 
 export function Providers({
   children,
@@ -60,14 +88,7 @@ export function Providers({
             else router.push(to);
             router.refresh();
           }}
-          Link={
-            Link as unknown as React.ComponentType<{
-              className?: string;
-              href: string;
-              to?: string;
-              children?: React.ReactNode;
-            }>
-          }
+          Link={AuthLink}
         >
           {children}
         </AuthProvider>

@@ -1,6 +1,6 @@
 # auth-ui
 
-White-label **login & consent UI** for an Authlete-backed OAuth/OIDC Authorization Server (e.g. [`authlete/typescript-oauth-server`](https://github.com/authlete/typescript-oauth-server)). The AS is headless; **auth-ui renders every screen the user sees** during sign-in and consent.
+White-label **authentication & consent UI** for an Authlete-backed OAuth/OIDC Authorization Server (e.g. [`authlete/typescript-oauth-server`](https://github.com/authlete/typescript-oauth-server)). The AS is headless; **auth-ui renders every screen the user sees** during authentication and consent.
 
 Built on **Next.js 16 · Tailwind 4 · Better Auth · libSQL**.
 
@@ -11,7 +11,7 @@ Runs fully locally against a local AS — no cloud services needed (libSQL is ju
 ```bash
 git clone <repo> && cd auth-ui
 npm install
-cp .env.example .env    # fill BETTER_AUTH_SECRET, AS_JWKS_URI, AUTH_UI_JWKS (see comments)
+cp .env.example .env    # fill BETTER_AUTH_SECRET, AS_ISSUER_ID, AUTH_UI_JWKS (see comments)
 npm run migrate         # create the local SQLite schema (data/auth-ui.sqlite)
 npm run dev             # → http://localhost:3001
 ```
@@ -33,7 +33,7 @@ node --env-file=.env scripts/smoke-e2e.mjs
 | `BETTER_AUTH_SECRET` | session secret (`openssl rand -base64 32`) |
 | `BETTER_AUTH_URL` | this app's URL (default `http://localhost:3001`) |
 | `AS_BASE_URL` | where the AS is reachable (default `http://localhost:3000`) |
-| `AS_JWKS_URI` | the AS's public JWKS, used to verify its JWTs |
+| `AS_ISSUER_ID` | the AS's stable identity — and the origin its public JWKS is fetched from to verify its JWTs |
 | `AUTH_UI_JWKS` | this app's ES256 private JWKS (published, private fields stripped, at `/.well-known/jwks.json`) |
 | `DATABASE_URL` | libSQL target — a file locally, a Turso URL when hosted |
 
@@ -46,7 +46,7 @@ Vercel-ready; Next.js is auto-detected (no `vercel.json`). The only requirement 
 - put its URL + token in `.env` as `DATABASE_URL` (`libsql://…`) and `DATABASE_AUTH_TOKEN`
 - `npm run migrate` to populate the schema
 
-**Vercel env vars:** `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (your deploy URL), `AS_BASE_URL`, `AS_JWKS_URI`, `AUTH_UI_JWKS`. Mark the secrets Sensitive.
+**Vercel env vars:** `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (your deploy URL), `AS_BASE_URL`, `AS_ISSUER_ID`, `AUTH_UI_JWKS`. Mark the secrets Sensitive. Optional feature keys (email, social) live in `.env.example`.
 
 Because back-channel is server-to-server, a hosted auth-ui needs an AS it can reach over the network (and the AS must reach it back). A hosted auth-ui can't talk to a localhost AS until front-channel lands.
 
@@ -58,21 +58,32 @@ Ships unbranded. Rebrand from one file:
 - Set `logoMark` to an image in `/public/brand`, or keep the built-in neutral mark.
 - Or replace the UI entirely — anything that speaks the same protocol to the AS works.
 
-## How it works — Externalized Login & Consent
+## Managed components
+
+**Most of the UI is managed** — installed from the [better-auth-ui](https://better-auth-ui.com) registry (built on [shadcn/ui](https://ui.shadcn.com) primitives) into `src/components/auth`, `src/components/ui`, and `src/lib/auth`. Treat these as managed, not owned — don't hand-edit them; **update by re-installing**:
+
+```bash
+npx shadcn@latest add @better-auth-ui/<name>   # better-auth-ui: auth, two-factor, …
+npx shadcn@latest add <name>                    # shadcn/ui primitives: button, dialog, …
+```
+
+The rest is thin glue we own — Better Auth config, plugin wiring, the email transport, and the brand. New features (2FA, passkeys, social, …) come from the registry: install the component, wire it in config, never fork it.
+
+## How it works — Externalized Authentication & Consent
 
 Decouples authentication and consent from the AS. The AS stays a thin, spec-compliant OAuth/OIDC surface holding **no per-transaction state**; auth-ui owns everything the user touches.
 
 | Component | Role |
 |---|---|
 | **RP** | the app requesting access: starts `/authorize`, receives tokens. Integrates with the AS using standard OAuth/OIDC.|
-| **AS** | OAuth/OIDC endpoints; delegates login/consent to auth-ui; owns the redirect back to the RP |
+| **AS** | OAuth/OIDC endpoints; delegates authentication/consent to auth-ui; owns the redirect back to the RP |
 | **auth-ui** | the UI the user actually sees: authenticates the user, collects consent, records the decision against an opaque **authorization id** |
 | **Authlete** | protocol engine; owns per-transaction state; only the AS calls it |
 
 auth-ui holds the user session (Better Auth), not the OAuth transaction. It speaks a small component protocol to the AS, authenticated by **per-request mutual JWT** — each side publishes a JWKS and verifies the other:
 
 - `GET  /api/authorizations/{id}` — fetch the in-flight authorization (auth-ui → AS)
-- `POST /api/authorizations/{id}/decision` — submit approve/deny (auth-ui → AS)
+- `POST /api/authorizations/{id}/outcome` — report an interaction outcome: authenticate, then consent (auth-ui → AS)
 - `GET  /api/users/{id}` — resolve user claims (AS → auth-ui)
 - `GET  /.well-known/jwks.json` — auth-ui's public keys (AS → auth-ui)
 
@@ -80,9 +91,12 @@ auth-ui holds the user session (Better Auth), not the OAuth transaction. It spea
 
 ## Roadmap
 
+Supported today (all from the registry): email/password, email verification, password reset, multi-account device sessions, **TOTP 2FA + backup codes**, and env-gated **social / OIDC sign-in** (Google, Microsoft, …).
+
+Planned:
+
 - **Front-channel interaction mode** — browser-mediated; enables split local/hosted setups
-- **MFA** (TOTP, WebAuthn 2FA) · **Passkeys** · **Magic link**
-- **Federated sign-in** (Google, Microsoft, Okta, custom OIDC)
+- **Passkeys** (WebAuthn) · **Magic link** · **custom-issuer OIDC** (Okta/Auth0 via discovery)
 - **Richer consent** — per-claim choices, RAR, persistent grant management
 - **Account recovery / step-up**
 

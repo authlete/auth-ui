@@ -37,6 +37,9 @@ export const auth = betterAuth({
       await sendEmail({ to: user.email, subject: "Verify your email", text: `Verify your email:\n${url}` });
     },
   },
+  // Env-gated (see config.ts). Empty when no provider env is set — callback
+  // URLs are auto-derived as {BETTER_AUTH_URL}/api/auth/callback/{provider}.
+  socialProviders: config.socialProviders,
   advanced: {
     useSecureCookies: config.nodeEnv === "production",
   },

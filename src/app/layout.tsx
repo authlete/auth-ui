@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 import { activeBrand, brandCssVars } from "@/brand/brand";
+import { config } from "@/config";
 
 export const metadata: Metadata = {
   title: activeBrand.productName,
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           single source of truth and a swap needs no CSS edit.
         */}
         <style dangerouslySetInnerHTML={{ __html: brandCssVars(activeBrand) }} />
-        <Providers>{children}</Providers>
+        <Providers socialProviders={config.enabledSocialProviderIds}>{children}</Providers>
       </body>
     </html>
   );

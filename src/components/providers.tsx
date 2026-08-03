@@ -11,13 +11,22 @@ import { ThemeProvider, useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import type { SocialProvider } from "better-auth/social-providers";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { multiSessionPlugin } from "@/lib/auth/multi-session-plugin";
 import { themePlugin } from "@/lib/auth/theme-plugin";
 import { authClient } from "@/lib/auth-client";
 import { getQueryClient } from "@/lib/query-client";
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  socialProviders,
+}: {
+  children: ReactNode;
+  // Enabled provider ids, resolved server-side from env (config.ts) and passed
+  // down so no secrets reach the client. Empty → no social buttons render.
+  socialProviders?: SocialProvider[];
+}) {
   const router = useRouter();
   const queryClient = getQueryClient();
 
@@ -38,6 +47,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <AuthProvider
           authClient={authClient}
           plugins={[multiSessionPlugin(), themePlugin({ useTheme })]}
+          socialProviders={socialProviders}
           redirectTo="/"
           navigate={({ to, replace }) => {
             // router.refresh() re-runs server components so the home's

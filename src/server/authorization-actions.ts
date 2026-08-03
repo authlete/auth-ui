@@ -6,8 +6,11 @@
 
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { submitOutcome } from "@/lib/as-client";
+import { authorizationEntryUrl } from "@/lib/authorization";
 
 function requireField(formData: FormData, field: string, action: string): string {
   const v = formData.get(field);
@@ -24,6 +27,20 @@ export async function approveConsent(formData: FormData): Promise<void> {
 
   const step = await submitOutcome(asBase, id, { type: "consent", granted_scopes: grantedScopes });
   if (step.next === "done") redirect(step.redirect_to);
+}
+
+/**
+ * prompt=select_account: make the chosen device session active, then return to
+ * the authorization entry with the account-chosen marker so the flow proceeds
+ * with that account instead of re-showing the chooser.
+ */
+export async function selectAccount(formData: FormData): Promise<void> {
+  const id = requireField(formData, "authorization", "selectAccount");
+  const interaction = requireField(formData, "interaction", "selectAccount");
+  const sessionToken = requireField(formData, "session_token", "selectAccount");
+
+  await auth.api.setActiveSession({ body: { sessionToken }, headers: await headers() });
+  redirect(authorizationEntryUrl(id, interaction, { accountSelected: true }));
 }
 
 export async function denyConsent(formData: FormData): Promise<void> {

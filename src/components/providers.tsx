@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { multiSessionPlugin } from "@/lib/auth/multi-session-plugin";
 import { authClient } from "@/lib/auth-client";
 import { getQueryClient } from "@/lib/query-client";
 
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <AuthProvider
           authClient={authClient}
+          plugins={[multiSessionPlugin()]}
           redirectTo="/"
           navigate={({ to, replace }) => (replace ? router.replace(to) : router.push(to))}
           Link={Link as unknown as React.ComponentType<{

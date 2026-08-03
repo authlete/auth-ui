@@ -20,22 +20,24 @@ import {
   AuthorizationNotFoundError,
   type AuthorizationState,
 } from "@/lib/as-client";
-import { approveConsent, denyConsent } from "@/server/authorization-actions";
+import { approveConsent, denyConsent, selectAccount } from "@/server/authorization-actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConsentForm } from "@/components/consent-form";
+import { AccountChooser } from "@/components/account-chooser";
 import { SplitLayout } from "@/components/layouts/split-layout";
-import { clientDisplayName, signInUrlForAuthorization } from "@/lib/authorization";
+import { clientDisplayName, signInUrlForAuthorization, ACCOUNT_SELECTED_PARAM } from "@/lib/authorization";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ interaction?: string }>;
+  searchParams: Promise<{ interaction?: string; [ACCOUNT_SELECTED_PARAM]?: string }>;
 };
 
 type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 export default async function AuthorizationPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { interaction } = await searchParams;
+  const sp = await searchParams;
+  const { interaction } = sp;
   if (!interaction) return renderExpired();
 
   // The interaction token carries the AS callback base and request start time;
@@ -64,6 +66,35 @@ export default async function AuthorizationPage({ params, searchParams }: PagePr
   // Interaction 1 — authenticate: ensure a session that meets the requirement.
   if (!session?.user || shouldForceReauth(state.authenticate, session, issuedAt)) {
     redirect(signInUrlForAuthorization(id, interaction, state.authenticate.login_hint));
+  }
+
+  // prompt=select_account: let the user pick which signed-in account to use
+  // before proceeding. Fires once per request — the ACCOUNT_SELECTED marker set
+  // on the return from the chooser breaks the loop, mirroring prompt=login above.
+  const prompts = state.authenticate.prompt?.split(/\s+/) ?? [];
+  if (prompts.includes("select_account") && sp[ACCOUNT_SELECTED_PARAM] !== "1") {
+    const devices = await auth.api.listDeviceSessions({ headers: reqHeaders });
+    const accounts = devices.map((d) => ({
+      id: d.user.id,
+      name: d.user.name,
+      email: d.user.email,
+      token: d.session.token,
+    }));
+    return (
+      <SplitLayout
+        brandHeadline="Choose an account"
+        brandSubhead={`to continue to ${clientDisplayName(state.client)}`}
+      >
+        <AccountChooser
+          authorizationId={id}
+          interaction={interaction}
+          client={state.client}
+          accounts={accounts}
+          addAccountUrl={signInUrlForAuthorization(id, interaction, state.authenticate.login_hint)}
+          selectAction={selectAccount}
+        />
+      </SplitLayout>
+    );
   }
 
   // Report the authenticate outcome; the AS reconciles → consent or done.

@@ -8,9 +8,25 @@ import type { Client } from "@/lib/as-client";
 
 export const AUTHORIZATION_RETURN_PARAM = "next";
 
+/** Marks that the user has already picked an account for this request, so the
+ * select_account chooser fires once and doesn't loop. */
+export const ACCOUNT_SELECTED_PARAM = "account_selected";
+
 /** Path on auth-ui where the user lands for an in-flight authorization. */
 export function authorizationEntryPath(id: string): string {
   return `/authorizations/${encodeURIComponent(id)}`;
+}
+
+/** Authorization entry URL, carrying the interaction token and (optionally) the
+ * account-chosen marker. Used to return to the flow after picking an account. */
+export function authorizationEntryUrl(
+  id: string,
+  interaction: string,
+  opts: { accountSelected?: boolean } = {},
+): string {
+  const params = new URLSearchParams({ interaction });
+  if (opts.accountSelected) params.set(ACCOUNT_SELECTED_PARAM, "1");
+  return `${authorizationEntryPath(id)}?${params.toString()}`;
 }
 
 /** Sign-in URL that returns the user to the in-flight authorization once authed. */

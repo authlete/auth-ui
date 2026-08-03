@@ -13,7 +13,7 @@ import { auth, type Session } from "@/lib/auth";
 import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
 import { ThemeToggle } from "./theme-toggle";
-import { UserMenu } from "./user-menu";
+import { UserButton } from "@/components/auth/user/user-button";
 
 type Props = {
   children: ReactNode;
@@ -39,7 +39,7 @@ export async function AppShell({ children, title, description, session: sessionP
           <div className="flex items-center gap-1">
             <ThemeToggle />
             {session?.user ? (
-              <UserMenu name={session.user.name} email={session.user.email} />
+              <UserButton size="icon" />
             ) : null}
           </div>
         </div>

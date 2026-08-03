@@ -59,9 +59,12 @@ function fail(label, ...rest) {
 
 // Sign a JWT addressed to the AS using auth-ui's interaction protocol key.
 async function signForAs(payload) {
-  const key = await importJWK(SIGNING_JWK, "ES256");
+  // Read the algorithm from the key itself (ES256, RS256, …) rather than
+  // assuming one — mirrors how the app signs in src/lib/jws.ts.
+  const alg = SIGNING_JWK.alg || "ES256";
+  const key = await importJWK(SIGNING_JWK, alg);
   return new SignJWT(payload)
-    .setProtectedHeader({ alg: "ES256", kid: SIGNING_JWK.kid, typ: "JWT" })
+    .setProtectedHeader({ alg, kid: SIGNING_JWK.kid, typ: "JWT" })
     .setIssuer(AUTH_UI_BASE_URL)
     .setSubject(AUTH_UI_BASE_URL)
     .setAudience(AS_ISSUER_ID)

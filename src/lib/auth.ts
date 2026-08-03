@@ -11,6 +11,7 @@
 
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import { multiSession } from "better-auth/plugins";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { config } from "@/config";
 
@@ -26,7 +27,10 @@ export const auth = betterAuth({
     useSecureCookies: config.nodeEnv === "production",
   },
   trustedOrigins: [config.betterAuthUrl],
-  plugins: [nextCookies()],
+  // multiSession lets several accounts stay signed in on one device (device
+  // sessions), which powers the prompt=select_account chooser. nextCookies MUST
+  // stay last so server actions can set the session cookies it writes.
+  plugins: [multiSession(), nextCookies()],
 });
 
 export type Session = typeof auth.$Infer.Session;

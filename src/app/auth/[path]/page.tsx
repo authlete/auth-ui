@@ -3,15 +3,13 @@
  * shadcn registry. Handles sign-in, sign-up, sign-out, forgot-password,
  * reset-password based on the path segment.
  *
- * If `?next=<path>` is present (typically `/authorizations/<id>`), the page
- * wraps the auth view in <AuthRedirectOverride next=...> so post-sign-in
- * navigation lands back at the in-flight authorization page instead of the
- * default home.
+ * Post-auth redirect is native: better-auth-ui reads `?redirectTo=` from the
+ * URL, carries it across its own sign-in↔sign-up links, and redirects there on
+ * success. Authorization flows arrive with `?redirectTo=/authorizations/<id>`.
  */
 
 import { notFound } from "next/navigation";
 import { Auth } from "@/components/auth/auth";
-import { AuthRedirectOverride } from "@/components/auth-redirect-override";
 import { SplitLayout } from "@/components/layouts/split-layout";
 
 const VALID_AUTH_PATHS = new Set([
@@ -24,18 +22,19 @@ const VALID_AUTH_PATHS = new Set([
 
 type PageProps = {
   params: Promise<{ path: string }>;
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ redirectTo?: string }>;
 };
 
 export default async function AuthPage({ params, searchParams }: PageProps) {
   const { path } = await params;
   if (!VALID_AUTH_PATHS.has(path)) notFound();
 
-  const { next } = await searchParams;
-  const inAuthorizationFlow = typeof next === "string" && next.length > 0;
-  // Direct visits use the brand's default panel copy; mid-flow visits get a
-  // short contextual override telling the user they're completing a request.
-  const view = inAuthorizationFlow ? (
+  const { redirectTo } = await searchParams;
+  const inAuthorizationFlow = typeof redirectTo === "string" && redirectTo.length > 0;
+
+  // Direct visits use the brand's default panel copy; mid-flow visits (returning
+  // to an in-flight authorization) get a short contextual override.
+  return inAuthorizationFlow ? (
     <SplitLayout
       brandHeadline="Almost there."
       brandSubhead="Sign in to continue to the application that sent you here."
@@ -47,10 +46,4 @@ export default async function AuthPage({ params, searchParams }: PageProps) {
       <Auth path={path} />
     </SplitLayout>
   );
-
-  if (inAuthorizationFlow) {
-    return <AuthRedirectOverride next={next}>{view}</AuthRedirectOverride>;
-  }
-
-  return view;
 }

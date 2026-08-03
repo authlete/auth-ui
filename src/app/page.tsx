@@ -1,49 +1,44 @@
 /**
- * Root entry — pure home page. In-flight authorizations are handled by
- * /authorizations/[id]. This page covers two states:
- *   - signed-in user (no transaction in flight) → AppShell home
- *   - anonymous user → SplitLayout welcome with sign-in/sign-up links
+ * Root entry — the signed-in account home.
+ *
+ * Unauthenticated users are redirected to sign-in; there is no separate
+ * anonymous landing (auth-ui is a login/consent front-end, not a marketing
+ * site — real users arrive at /authorizations/[id] via the AS, never here).
+ *
+ * The signed-in view is the native better-auth-ui account surface (`<Settings>`),
+ * which includes the `useAuthenticate` guard — so signing out (via the account
+ * card or the user menu) redirects back to sign-in.
  */
 
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { UserPlus2 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { AccountSettings } from "@/components/auth/settings/account/account-settings";
+import { Settings } from "@/components/auth/settings/settings";
 import { AppShell } from "@/components/layouts/app-shell";
-import { SplitLayout } from "@/components/layouts/split-layout";
-import { activeBrand } from "@/brand/brand";
+import { cn } from "@/lib/utils";
 
 export default async function Home() {
   const session = await auth.api.getSession({ headers: await headers() });
-
-  if (session?.user) {
-    // Signed-in home is the native better-auth-ui account surface (profile,
-    // email, and the multi-session accounts card). It renders client-side from
-    // the session, so switching accounts updates it live — no stale reload.
-    return (
-      <AppShell title="Account" description="Manage your profile and signed-in accounts." session={session}>
-        <AccountSettings />
-      </AppShell>
-    );
-  }
+  if (!session?.user) redirect("/auth/sign-in");
 
   return (
-    <SplitLayout>
-      <Card>
-        <CardHeader>
-          <CardTitle>Welcome to {activeBrand.productName}</CardTitle>
-          <CardDescription>
-            This is the authentication front-end. An OAuth application will
-            redirect you here when it needs you to sign in.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="gap-2">
-          <Link href="/auth/sign-in" className={buttonVariants()}>Sign in</Link>
-          <Link href="/auth/sign-up" className={buttonVariants({ variant: "outline" })}>Sign up</Link>
-        </CardFooter>
-      </Card>
-    </SplitLayout>
+    <AppShell
+      title="Account"
+      description="Manage your profile and signed-in accounts."
+    >
+      <div className="space-y-6">
+        <Settings view="account" hideNav />
+        <Link
+          href="/auth/sign-in"
+          className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+        >
+          <UserPlus2 className="size-4" />
+          Add another account
+        </Link>
+      </div>
+    </AppShell>
   );
 }

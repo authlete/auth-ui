@@ -6,8 +6,6 @@
 
 import type { Client } from "@/lib/as-client";
 
-export const AUTHORIZATION_RETURN_PARAM = "next";
-
 /** Marks that the user has already picked an account for this request, so the
  * select_account chooser fires once and doesn't loop. */
 export const ACCOUNT_SELECTED_PARAM = "account_selected";
@@ -29,12 +27,17 @@ export function authorizationEntryUrl(
   return `${authorizationEntryPath(id)}?${params.toString()}`;
 }
 
-/** Sign-in URL that returns the user to the in-flight authorization once authed. */
+/**
+ * Sign-in URL that returns the user to the in-flight authorization once authed.
+ * Uses better-auth-ui's native `redirectTo` param — the Auth view reads it from
+ * the URL, carries it across the sign-in↔sign-up links, and redirects there on
+ * success, so no custom redirect wrapper is needed.
+ */
 export function signInUrlForAuthorization(id: string, interaction?: string, loginHint?: string): string {
   const entry = interaction
     ? `${authorizationEntryPath(id)}?interaction=${encodeURIComponent(interaction)}`
     : authorizationEntryPath(id);
-  const params = new URLSearchParams({ [AUTHORIZATION_RETURN_PARAM]: entry });
+  const params = new URLSearchParams({ redirectTo: entry });
   if (loginHint) params.set("login_hint", loginHint);
   return `/auth/sign-in?${params.toString()}`;
 }

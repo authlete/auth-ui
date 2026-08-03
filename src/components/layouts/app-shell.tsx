@@ -1,33 +1,23 @@
 /**
- * Top-bar shell used by signed-in surfaces (home, /settings/*).
- *
- * Reads the better-auth session itself when not supplied, so simple callers
- * don't need to fetch one just to render the header. Callers that already
- * have the session in scope should pass it through to avoid a second read.
+ * Minimal top-bar shell for signed-in surfaces (home, /settings/*): brand +
+ * user menu. `UserButton` reads its own auth state (and hosts the theme
+ * toggle via the theme plugin), so the shell carries no session itself. A
+ * richer app shell can replace this later.
  */
 
-import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { auth, type Session } from "@/lib/auth";
 import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
-import { ThemeToggle } from "./theme-toggle";
 import { UserButton } from "@/components/auth/user/user-button";
 
 type Props = {
   children: ReactNode;
   title?: string;
   description?: string;
-  /** Caller-supplied session to skip a server-side re-read. */
-  session?: Session | null;
 };
 
-export async function AppShell({ children, title, description, session: sessionProp }: Props) {
-  const session = sessionProp !== undefined
-    ? sessionProp
-    : await auth.api.getSession({ headers: await headers() });
-
+export function AppShell({ children, title, description }: Props) {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="border-b bg-background">
@@ -36,12 +26,7 @@ export async function AppShell({ children, title, description, session: sessionP
             <BrandMark />
             <span>{activeBrand.productName}</span>
           </Link>
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            {session?.user ? (
-              <UserButton size="icon" />
-            ) : null}
-          </div>
+          <UserButton size="icon" />
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-10">

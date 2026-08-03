@@ -9,7 +9,6 @@
 import type { ReactNode } from "react";
 import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
-import { ThemeToggle } from "./theme-toggle";
 
 type Props = {
   children: ReactNode;
@@ -26,9 +25,6 @@ export function SplitLayout({
     <div className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
       <BrandPanel headline={brandHeadline} subhead={brandSubhead} />
       <section className="relative flex items-center justify-center bg-background px-6 py-10 sm:px-10">
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
-        </div>
         <div className="w-full max-w-md">{children}</div>
       </section>
     </div>

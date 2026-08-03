@@ -18,6 +18,8 @@ const VALID_AUTH_PATHS = new Set([
   "sign-out",
   "forgot-password",
   "reset-password",
+  // TOTP challenge shown after password sign-in when the user has 2FA enabled.
+  "two-factor",
 ]);
 
 type PageProps = {

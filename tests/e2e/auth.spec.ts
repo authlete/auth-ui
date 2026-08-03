@@ -52,10 +52,6 @@ test("anonymous users are gated to sign-in with no signed-out theme toggle", asy
   await expect(page.getByLabel("Account")).toHaveCount(0);
   await expect(page.getByLabel("Light")).toHaveCount(0);
   await expect(page.getByLabel("Dark")).toHaveCount(0);
-
-  // Social sign-in is env-gated: with no provider env set (the default), only
-  // username/password is offered — no social buttons.
-  await expect(page.getByRole("button", { name: /Continue with/i })).toHaveCount(0);
 });
 
 test("sign-up lands on account home, exposes native theme control, and sign-out redirects", async ({

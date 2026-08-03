@@ -15,6 +15,7 @@ import type { SocialProvider } from "better-auth/social-providers";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { multiSessionPlugin } from "@/lib/auth/multi-session-plugin";
 import { themePlugin } from "@/lib/auth/theme-plugin";
+import { twoFactorPlugin } from "@/lib/auth/two-factor-plugin";
 import { authClient } from "@/lib/auth-client";
 import { getQueryClient } from "@/lib/query-client";
 
@@ -30,11 +31,8 @@ export function Providers({
   const router = useRouter();
   const queryClient = getQueryClient();
 
-  // Better Auth's auth mutations (sign-out, multi-session revoke/switch) don't
-  // refetch their React Query data in the App Router (better-auth#3608/#5875),
-  // so the accounts list and session go stale until a hard reload. Refetch on
-  // any successful mutation — the standard React Query pattern — so the list
-  // updates and useAuthenticate can redirect on sign-out.
+  // Better Auth mutations don't refetch their React Query data in the App Router
+  // (better-auth#3608), so refetch on any success to keep session/accounts fresh.
   useEffect(() => {
     return queryClient.getMutationCache().subscribe((event) => {
       if (event?.mutation?.state.status === "success") queryClient.invalidateQueries();
@@ -46,14 +44,18 @@ export function Providers({
       <QueryClientProvider client={queryClient}>
         <AuthProvider
           authClient={authClient}
-          plugins={[multiSessionPlugin(), themePlugin({ useTheme })]}
+          plugins={[multiSessionPlugin(), themePlugin({ useTheme }), twoFactorPlugin()]}
           socialProviders={socialProviders}
           redirectTo="/"
           navigate={({ to, replace }) => {
-            // router.refresh() re-runs server components so the home's
-            // signed-in/anon gate re-evaluates after sign-in/out/switch —
-            // otherwise Next serves the cached RSC and the page shows stale
-            // auth state until a hard refresh.
+            // Auth completion (leaving /auth/* for an app page) does a full
+            // reload so the destination boots with fresh auth state; in-flow
+            // navigation stays soft.
+            const inAuthFlow = window.location.pathname.startsWith("/auth/");
+            if (inAuthFlow && !to.startsWith("/auth/")) {
+              window.location.assign(to);
+              return;
+            }
             if (replace) router.replace(to);
             else router.push(to);
             router.refresh();

@@ -1,6 +1,6 @@
-// @ts-nocheck — registry-installed (@better-auth-ui/react v1.6.17) targets newer better-auth API than the pinned 1.3.34. Runtime is correct; types drift.
 "use client"
 
+import type { AuthView } from "@better-auth-ui/core"
 import { useAuth } from "@better-auth-ui/react"
 import { useMemo } from "react"
 
@@ -9,6 +9,7 @@ import { ProviderButton } from "./provider-button"
 
 export type ProviderButtonsProps = {
   socialLayout?: SocialLayout
+  view?: AuthView
 }
 
 export type SocialLayout = "auto" | "horizontal" | "vertical" | "grid"
@@ -20,7 +21,8 @@ export type SocialLayout = "auto" | "horizontal" | "vertical" | "grid"
  * @param socialLayout - Preferred layout for the provider buttons; `"auto"` chooses based on the number of providers.
  */
 export function ProviderButtons({
-  socialLayout = "auto"
+  socialLayout = "auto",
+  view = "signIn"
 }: ProviderButtonsProps) {
   const { socialProviders } = useAuth()
 
@@ -49,6 +51,7 @@ export function ProviderButtons({
         <ProviderButton
           key={provider}
           provider={provider}
+          view={view}
           display={
             resolvedSocialLayout === "vertical"
               ? "full"

@@ -1,7 +1,10 @@
-// @ts-nocheck — registry-installed (@better-auth-ui/react v1.6.17) targets newer better-auth API than the pinned 1.3.34. Runtime is correct; types drift.
 "use client"
 
-import { authMutationKeys, getProviderName } from "@better-auth-ui/core"
+import {
+  type AuthView,
+  authMutationKeys,
+  getProviderName
+} from "@better-auth-ui/core"
 import { providerIcons, useAuth, useSignInSocial } from "@better-auth-ui/react"
 import { useIsMutating } from "@tanstack/react-query"
 import type { SocialProvider } from "better-auth/social-providers"
@@ -9,10 +12,13 @@ import type { ComponentProps } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { cn } from "@/lib/utils"
+import { LastUsedBadge } from "./last-login-method/last-used-badge"
 
 export type ProviderButtonProps = {
   provider: SocialProvider
   display?: "full" | "name" | "icon"
+  view?: AuthView
 } & Omit<ComponentProps<typeof Button>, "onClick" | "children" | "disabled">
 
 /**
@@ -24,7 +30,9 @@ export type ProviderButtonProps = {
 export function ProviderButton({
   provider,
   display = "full",
+  view = "signIn",
   variant = "outline",
+  className,
   ...props
 }: ProviderButtonProps) {
   const { authClient, baseURL, localization, redirectTo } = useAuth()
@@ -50,10 +58,14 @@ export function ProviderButton({
       variant={variant}
       disabled={isPending}
       onClick={() => signInSocial({ provider, callbackURL })}
+      className={cn("relative overflow-visible", className)}
       {...props}
-      aria-label={getProviderName(provider)}
     >
-      {signInSocialPending ? <Spinner /> : <ProviderIcon />}
+      {signInSocialPending ? (
+        <Spinner />
+      ) : ProviderIcon ? (
+        <ProviderIcon />
+      ) : null}
 
       {display === "full"
         ? localization.auth.continueWith.replace(
@@ -63,6 +75,12 @@ export function ProviderButton({
         : display === "name"
           ? getProviderName(provider)
           : null}
+
+      {display === "icon" && (
+        <span className="sr-only">{getProviderName(provider)}</span>
+      )}
+
+      {view !== "signUp" && <LastUsedBadge method={provider} floating />}
     </Button>
   )
 }

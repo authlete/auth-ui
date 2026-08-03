@@ -5,16 +5,17 @@
  * (`file:./data/auth-ui.sqlite`) in dev, and a Turso database in production
  * via DATABASE_URL + DATABASE_AUTH_TOKEN. See `config.ts`.
  *
- * `nextCookies()` MUST be the last plugin so server actions can set cookies
- * per better-auth's Next.js integration.
+ * `nextCookies()` MUST be the last plugin (Next.js cookie writes). Email hooks
+ * lazy-import `@/lib/email` so `migrate` (better-auth CLI) doesn't choke on its
+ * `import "server-only"`.
  */
 
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { multiSession } from "better-auth/plugins";
+import { multiSession, twoFactor } from "better-auth/plugins";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
+import { activeBrand } from "@/brand/brand";
 import { config } from "@/config";
-import { sendEmail } from "@/lib/email";
 
 const dialect = new LibsqlDialect({
   url: config.databaseUrl,
@@ -26,6 +27,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
+      const { sendEmail } = await import("@/lib/email");
       await sendEmail({
         to: user.email,
         subject: "Reset your password",
@@ -38,6 +40,7 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
+      const { sendEmail } = await import("@/lib/email");
       await sendEmail({
         to: user.email,
         subject: "Verify your email",
@@ -52,10 +55,9 @@ export const auth = betterAuth({
     useSecureCookies: config.nodeEnv === "production",
   },
   trustedOrigins: [config.betterAuthUrl],
-  // multiSession lets several accounts stay signed in on one device (device
-  // sessions), which powers the prompt=select_account chooser. nextCookies MUST
-  // stay last so server actions can set the session cookies it writes.
-  plugins: [multiSession(), nextCookies()],
+  // multiSession powers prompt=select_account; twoFactor adds TOTP + backup
+  // codes. nextCookies MUST stay last.
+  plugins: [multiSession(), twoFactor({ issuer: activeBrand.productName }), nextCookies()],
 });
 
 export type Session = typeof auth.$Infer.Session;

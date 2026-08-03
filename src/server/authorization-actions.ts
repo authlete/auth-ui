@@ -1,16 +1,13 @@
 /**
- * Server actions for the authorization decision flow. Both call the AS and
- * then issue a Next.js `redirect()` (which throws NEXT_REDIRECT) to navigate
- * the browser to the AS's /resume.
+ * Server actions for the consent interaction. Each reports the consent outcome
+ * to the AS and then issues a Next.js `redirect()` to the AS's /resume. (The
+ * authenticate outcome is reported earlier, by the authorization page.)
  */
 
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { submitDecision } from "@/lib/as-client";
-import { signInUrlForAuthorization } from "@/lib/authorization";
+import { submitOutcome } from "@/lib/as-client";
 
 function requireField(formData: FormData, field: string, action: string): string {
   const v = formData.get(field);
@@ -20,49 +17,23 @@ function requireField(formData: FormData, field: string, action: string): string
   return v;
 }
 
-export async function approveAuthorization(formData: FormData): Promise<void> {
-  const id = requireField(formData, "authorization", "approveAuthorization");
-  const asBase = requireField(formData, "as_base", "approveAuthorization");
-
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) redirect(signInUrlForAuthorization(id));
-
+export async function approveConsent(formData: FormData): Promise<void> {
+  const id = requireField(formData, "authorization", "approveConsent");
+  const asBase = requireField(formData, "as_base", "approveConsent");
   const grantedScopes = formData.getAll("granted_scope").map((v) => String(v));
 
-  // Session createdAt is the authenticated lifetime's start — closest stand-in
-  // for the auth event time when no MFA / step-up has happened since.
-  const authenticatedAt = session.session.createdAt
-    ? Math.floor(new Date(session.session.createdAt).getTime() / 1000)
-    : Math.floor(Date.now() / 1000);
-
-  const userClaims: Record<string, unknown> = {
-    sub: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    email_verified: session.user.emailVerified ?? false,
-  };
-
-  const { redirect_to } = await submitDecision(asBase, id, {
-    outcome: "approved",
-    subject: session.user.id,
-    amr: ["pwd"],
-    authenticated_at: authenticatedAt,
-    granted_scopes: grantedScopes,
-    user_claims: userClaims,
-  });
-
-  redirect(redirect_to);
+  const step = await submitOutcome(asBase, id, { type: "consent", granted_scopes: grantedScopes });
+  if (step.next === "done") redirect(step.redirect_to);
 }
 
-export async function denyAuthorization(formData: FormData): Promise<void> {
-  const id = requireField(formData, "authorization", "denyAuthorization");
-  const asBase = requireField(formData, "as_base", "denyAuthorization");
+export async function denyConsent(formData: FormData): Promise<void> {
+  const id = requireField(formData, "authorization", "denyConsent");
+  const asBase = requireField(formData, "as_base", "denyConsent");
 
-  const { redirect_to } = await submitDecision(asBase, id, {
-    outcome: "denied",
+  const step = await submitOutcome(asBase, id, {
+    type: "consent",
     error: "access_denied",
     error_description: "User denied the authorization request",
   });
-
-  redirect(redirect_to);
+  if (step.next === "done") redirect(step.redirect_to);
 }

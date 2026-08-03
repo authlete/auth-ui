@@ -9,6 +9,7 @@ import {
   useSignInEmail
 } from "@better-auth-ui/react"
 import { useIsMutating } from "@tanstack/react-query"
+import { useSearchParams } from "next/navigation"
 import { type SyntheticEvent, useState } from "react"
 import { toast } from "sonner"
 
@@ -62,6 +63,9 @@ export function SignIn({
   } = useAuth()
 
   const { fetchOptions, resetFetchOptions } = useFetchOptions()
+
+  // OIDC login_hint (forwarded by the authorization flow) prefills the email.
+  const loginHint = useSearchParams().get("login_hint") ?? undefined
 
   const [password, setPassword] = useState("")
 
@@ -167,6 +171,7 @@ export function SignIn({
                     name="email"
                     type="email"
                     autoComplete="email"
+                    defaultValue={loginHint}
                     placeholder={localization.auth.emailPlaceholder}
                     required
                     disabled={isPending}

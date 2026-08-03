@@ -8,7 +8,7 @@
 
 import "server-only";
 import { signJwt, verifyJwt } from "./jws";
-import { authorizationApiPath, authorizationDecisionApiPath } from "./authorization";
+import { authorizationApiPath, authorizationOutcomeApiPath } from "./authorization";
 
 export type Client = {
   client_id?: string;
@@ -23,39 +23,36 @@ export type Scope = {
   description?: string;
 };
 
-export type AuthorizationDetails = {
+/** GET response — the first interaction (authenticate) plus client display info. */
+export type AuthorizationState = {
   client: Client;
-  needs: Array<"authentication" | "consent">;
-  skip: boolean;
-  login_hint?: string;
-  prompt?: string;
-  acr_values?: string[];
-  max_age?: number;
-  ui_locales?: string[];
-  subject: string | null;
-  requested_scopes: Scope[];
-  requested_claims?: unknown;
-  previously_granted_scopes?: string[];
+  next: "authenticate";
+  authenticate: {
+    acr_values?: string[];
+    max_age?: number;
+    prompt?: string;
+    login_hint?: string;
+    ui_locales?: string[];
+  };
 };
 
-export type ApprovedDecision = {
-  outcome: "approved";
-  subject: string;
-  acr?: string;
-  amr?: string[];
-  authenticated_at?: number;
-  granted_scopes?: string[];
-  user_claims?: Record<string, unknown>;
-  granted_claims?: Record<string, unknown>;
-};
+/** Reply to a reported outcome — the next step. */
+export type NextStep =
+  | { next: "consent"; consent: { new: Scope[]; already_granted: Scope[] } }
+  | { next: "done"; redirect_to: string };
 
-export type DeniedDecision = {
-  outcome: "denied";
-  error: string;
-  error_description?: string;
-};
-
-export type Decision = ApprovedDecision | DeniedDecision;
+/** What auth-ui reports back for an interaction. */
+export type Outcome =
+  | {
+      type: "authenticate";
+      subject: string;
+      acr?: string;
+      amr?: string[];
+      authenticated_at?: number;
+      user_claims?: Record<string, unknown>;
+    }
+  | { type: "consent"; granted_scopes: string[] }
+  | { type: "authenticate" | "consent"; error: string; error_description?: string };
 
 export class AuthorizationNotFoundError extends Error {
   constructor(public id: string) {
@@ -65,16 +62,21 @@ export class AuthorizationNotFoundError extends Error {
 
 /**
  * Verify the AS interaction token (INTERACTION_PROTOCOL.md §1) and return the
- * callback base it carries — the one place `asBase` is trust-checked.
+ * callback base it carries plus its issue time — the one place `asBase` is
+ * trust-checked. `issuedAt` (the token's `iat`, in seconds) marks when the
+ * authorization request started, used to satisfy `prompt=login` exactly once.
  */
-export async function verifyInteraction(interaction: string, id: string): Promise<string> {
+export async function verifyInteraction(
+  interaction: string,
+  id: string,
+): Promise<{ asBase: string; issuedAt: number }> {
   const payload = await verifyJwt(interaction);
   if (payload.authorization !== id) throw new AuthorizationNotFoundError(id);
   const asBase = payload.as_base;
   if (typeof asBase !== "string" || asBase.length === 0) {
     throw new Error("interaction token missing as_base");
   }
-  return asBase;
+  return { asBase, issuedAt: payload.iat ?? 0 };
 }
 
 async function asFetch(
@@ -99,24 +101,20 @@ async function asFetch(
   return res;
 }
 
-export async function getAuthorization(asBase: string, id: string): Promise<AuthorizationDetails> {
+export async function getAuthorization(asBase: string, id: string): Promise<AuthorizationState> {
   const res = await asFetch(asBase, authorizationApiPath(id), { authorization: id }, id);
-  return (await res.json()) as AuthorizationDetails;
+  return (await res.json()) as AuthorizationState;
 }
 
-export async function submitDecision(
-  asBase: string,
-  id: string,
-  decision: Decision,
-): Promise<{ redirect_to: string }> {
-  // The decision lives in the JWT claims, not in an HTTP body — the signature
-  // binds the decision to this request.
+export async function submitOutcome(asBase: string, id: string, outcome: Outcome): Promise<NextStep> {
+  // The outcome lives in the JWT claims, not in an HTTP body — the signature
+  // binds it to this request. The AS replies with the next step.
   const res = await asFetch(
     asBase,
-    authorizationDecisionApiPath(id),
-    { authorization: id, decision },
+    authorizationOutcomeApiPath(id),
+    { authorization: id, outcome },
     id,
     { method: "POST" },
   );
-  return (await res.json()) as { redirect_to: string };
+  return (await res.json()) as NextStep;
 }

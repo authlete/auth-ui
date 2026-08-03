@@ -1,11 +1,11 @@
 /**
- * End-to-end smoke for v0.3 (mutual JWT) — drives the full
- * RP → AS → auth-ui → AS → RP loop, then exchanges the code and calls
- * /userinfo to verify the AS fetches live claims from auth-ui.
+ * End-to-end smoke — drives the full RP → AS → auth-ui → AS → RP loop over the
+ * two-interaction protocol (authenticate, then consent), exchanges the code, and
+ * calls /userinfo to verify the AS fetches live claims from auth-ui. A final pass
+ * re-runs the same user + scopes to verify incremental consent (consent skipped).
  *
- * Skips the actual server-action invocation (Next.js encoding is opaque) and
- * instead reproduces what the server action does by signing a decision JWT
- * with auth-ui's key and POSTing it to AS /api/authorizations/{id}/decision.
+ * Reproduces what auth-ui does by signing outcome JWTs with auth-ui's key and
+ * POSTing them to AS /api/authorizations/{id}/outcome.
  *
  * Usage:
  *   node --env-file=.env scripts/smoke-e2e.mjs
@@ -52,6 +52,11 @@ function ok(label, value = "") {
   console.log(`  ✅ ${label}${value ? `: ${value}` : ""}`);
 }
 
+function fail(label, ...rest) {
+  console.error(`  ❌ ${label}`, ...rest);
+  process.exit(1);
+}
+
 // Sign a JWT addressed to the AS using auth-ui's interaction protocol key.
 async function signForAs(payload) {
   const key = await importJWK(SIGNING_JWK, "ES256");
@@ -66,7 +71,37 @@ async function signForAs(payload) {
     .sign(key);
 }
 
-// 1) Sign up user via better-auth, capture session cookie + user id
+// RP → AS /authorize; returns the authorization id + callback base + PKCE state.
+async function startAuthorization() {
+  const codeVerifier = b64url(randomBytes(48));
+  const codeChallenge = b64url(createHash("sha256").update(codeVerifier).digest());
+  const state = randomUUID();
+  const res = await fetch(
+    `${AS_BASE_URL}/oauth/authorize?response_type=code&client_id=${RP_CLIENT_ID}&redirect_uri=${encodeURIComponent(RP_REDIRECT_URI)}&scope=${encodeURIComponent(RP_SCOPE)}&code_challenge=${codeChallenge}&code_challenge_method=S256&state=${state}`,
+    { redirect: "manual" },
+  );
+  const url = new URL(res.headers.get("location"));
+  const idMatch = url.pathname.match(/^\/authorizations\/([^/]+)$/);
+  if (!idMatch) fail("Unexpected redirect from /oauth/authorize:", url.href);
+  const interaction = url.searchParams.get("interaction");
+  const authzId = decodeURIComponent(idMatch[1]);
+  const asBase = interaction && decodeJwtPayload(interaction).as_base;
+  if (!asBase) fail("No usable interaction token:", url.href);
+  return { authzId, asBase, codeVerifier, state };
+}
+
+// auth-ui → AS /outcome: sign {authorization, outcome} and return the next step.
+async function postOutcome(asBase, authzId, outcome) {
+  const jws = await signForAs({ authorization: authzId, outcome });
+  const res = await fetch(`${asBase}/api/authorizations/${encodeURIComponent(authzId)}/outcome`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${jws}` },
+  });
+  if (!res.ok) fail("outcome POST failed", res.status, await res.text());
+  return res.json();
+}
+
+// 1) Sign up user via better-auth, capture user id
 step(1, "Sign up user in auth-ui");
 const userTag = randomUUID().slice(0, 8);
 const email = `e2e-${userTag}@example.com`;
@@ -77,91 +112,45 @@ const signUpRes = await fetch(`${AUTH_UI_BASE_URL}/api/auth/sign-up/email`, {
 });
 const signUpBody = await signUpRes.json();
 const userId = signUpBody?.user?.id ?? signUpBody?.id;
-if (!userId) {
-  console.error("No user id from sign-up", signUpRes.status, JSON.stringify(signUpBody));
-  process.exit(1);
-}
+if (!userId) fail("No user id from sign-up", signUpRes.status, JSON.stringify(signUpBody));
 ok("Signed up", `${email} (id=${userId})`);
 
-// 2) RP → AS /authorize — capture authorization id from redirect to auth-ui
-step(2, "RP → AS /authorize");
-const codeVerifier = b64url(randomBytes(48));
-const codeChallenge = b64url(createHash("sha256").update(codeVerifier).digest());
-const state = randomUUID();
-
-const authzRes = await fetch(
-  `${AS_BASE_URL}/oauth/authorize?response_type=code&client_id=${RP_CLIENT_ID}&redirect_uri=${encodeURIComponent(RP_REDIRECT_URI)}&scope=${encodeURIComponent(RP_SCOPE)}&code_challenge=${codeChallenge}&code_challenge_method=S256&state=${state}`,
-  { redirect: "manual" },
-);
-const interactionUrl = authzRes.headers.get("location");
-const parsedUi = new URL(interactionUrl);
-// Path-based: /authorizations/<id>?interaction=<jwt>
-const idMatch = parsedUi.pathname.match(/^\/authorizations\/([^/]+)$/);
-if (!idMatch) {
-  console.error("Unexpected redirect from /oauth/authorize:", interactionUrl);
-  process.exit(1);
-}
-const authzId = decodeURIComponent(idMatch[1]);
-ok("Got authorization id", authzId.slice(0, 16) + "…");
-
-// The AS callback base rides the signed interaction token, not static config.
-const interaction = parsedUi.searchParams.get("interaction");
-if (!interaction) {
-  console.error("No interaction token in redirect:", interactionUrl);
-  process.exit(1);
-}
-const interactionClaims = decodeJwtPayload(interaction);
-const asBase = interactionClaims.as_base;
-if (interactionClaims.authorization !== authzId || !asBase) {
-  console.error("Bad interaction token:", JSON.stringify(interactionClaims));
-  process.exit(1);
-}
-ok("interaction as_base", asBase);
-
-// 3) auth-ui POST /api/authorizations/{id}/decision — JWT-only, no body
-step(3, "auth-ui POST /api/authorizations/{id}/decision (signed JWT)");
-const decisionClaim = {
-  outcome: "approved",
+const authenticateOutcome = {
+  type: "authenticate",
   subject: userId,
   amr: ["pwd"],
   authenticated_at: Math.floor(Date.now() / 1000),
-  granted_scopes: ["openid", "profile", "email"],
-  user_claims: {
-    sub: userId,
-    name: `E2E ${userTag}`,
-    email,
-    email_verified: false,
-  },
+  user_claims: { sub: userId, name: `E2E ${userTag}`, email, email_verified: false },
 };
-const decisionJws = await signForAs({ authorization: authzId, decision: decisionClaim });
-const submitRes = await fetch(
-  `${asBase}/api/authorizations/${encodeURIComponent(authzId)}/decision`,
-  {
-    method: "POST",
-    headers: { authorization: `Bearer ${decisionJws}` },
-  },
-);
-if (!submitRes.ok) {
-  console.error("Decision submit failed", submitRes.status, await submitRes.text());
-  process.exit(1);
-}
-const { redirect_to: resumeUrl } = await submitRes.json();
-ok("redirect_to", resumeUrl);
+
+// 2) RP → AS /authorize
+step(2, "RP → AS /authorize");
+const { authzId, asBase, codeVerifier, state } = await startAuthorization();
+ok("authorization id", authzId.slice(0, 16) + "…");
+ok("interaction as_base", asBase);
+
+// 3) Two interactions: authenticate, then consent (first grant → consent needed)
+step(3, "auth-ui reports authenticate + consent outcomes");
+const authStep = await postOutcome(asBase, authzId, authenticateOutcome);
+if (authStep.next !== "consent") fail("expected next=consent on first grant, got", JSON.stringify(authStep));
+ok("authenticate → consent", `new: ${authStep.consent.new.map((s) => s.name).join(", ")}`);
+const consentStep = await postOutcome(asBase, authzId, {
+  type: "consent",
+  granted_scopes: authStep.consent.new.map((s) => s.name),
+});
+const resumeUrl = consentStep.redirect_to;
+ok("consent → done", resumeUrl);
 
 // 4) Browser → AS /authorizations/{id}/resume → RP redirect
 step(4, "Browser → /authorizations/{id}/resume → RP redirect");
 const finalRes = await fetch(resumeUrl, { redirect: "manual" });
 const rpUrl = finalRes.headers.get("location");
-if (!rpUrl) {
-  console.error("No location from /resume:", finalRes.status, await finalRes.text());
-  process.exit(1);
-}
+if (!rpUrl) fail("No location from /resume:", finalRes.status, await finalRes.text());
 const parsedRp = new URL(rpUrl);
 const code = parsedRp.searchParams.get("code");
-const returnedState = parsedRp.searchParams.get("state");
 ok("RP URL", rpUrl);
 ok("code", code?.slice(0, 16) + "…");
-ok("state matches", returnedState === state ? "yes" : "NO");
+ok("state matches", parsedRp.searchParams.get("state") === state ? "yes" : "NO");
 
 // 5) RP exchanges code for tokens
 step(5, "RP /token exchange (PKCE)");
@@ -176,10 +165,7 @@ const codeExchange = await fetch(`${AS_BASE_URL}/oauth/token`, {
     code_verifier: codeVerifier,
   }),
 }).then((r) => r.json());
-if (!codeExchange.access_token) {
-  console.error("Token exchange failed:", codeExchange);
-  process.exit(1);
-}
+if (!codeExchange.access_token) fail("Token exchange failed:", JSON.stringify(codeExchange));
 ok("access_token", codeExchange.access_token.slice(0, 16) + "…");
 ok("id_token", codeExchange.id_token ? codeExchange.id_token.slice(0, 16) + "…" : "(none)");
 ok("scope", codeExchange.scope);
@@ -190,8 +176,9 @@ const ui = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 }).then((r) => r.json());
 console.log("  Response body:", JSON.stringify(ui, null, 2));
-const ok6 = ui.sub === userId && ui.email === email;
-ok6 ? ok("live claims round-tripped end-to-end") : console.error("  ❌ claims wrong or missing");
+ui.sub === userId && ui.email === email
+  ? ok("live claims round-tripped end-to-end")
+  : console.error("  ❌ claims wrong or missing");
 
 // 7) /introspect
 step(7, "RS introspects access_token via /oauth/introspect");
@@ -210,10 +197,7 @@ step(8, "RP revokes the access_token");
 const revokeRes = await fetch(`${AS_BASE_URL}/oauth/revoke`, {
   method: "POST",
   headers: { "content-type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({
-    token: codeExchange.access_token,
-    client_id: RP_CLIENT_ID,
-  }),
+  body: new URLSearchParams({ token: codeExchange.access_token, client_id: RP_CLIENT_ID }),
 });
 ok("revocation status", String(revokeRes.status));
 
@@ -223,5 +207,13 @@ const ui2 = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 });
 ok("status after revoke", String(ui2.status) + " (expecting 401)");
+
+// 10) Incremental consent — same user + scopes → consent is skipped
+step(10, "Incremental consent (same user + scopes → consent skipped)");
+const again = await startAuthorization();
+const authStep2 = await postOutcome(again.asBase, again.authzId, authenticateOutcome);
+authStep2.next === "done"
+  ? ok("consent skipped — all requested scopes already granted")
+  : fail("expected next=done (nothing new to consent), got", JSON.stringify(authStep2));
 
 console.log("\n══════════════════  E2E COMPLETE  ══════════════════\n");

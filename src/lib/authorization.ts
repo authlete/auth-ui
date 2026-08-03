@@ -14,11 +14,13 @@ export function authorizationEntryPath(id: string): string {
 }
 
 /** Sign-in URL that returns the user to the in-flight authorization once authed. */
-export function signInUrlForAuthorization(id: string, interaction?: string): string {
+export function signInUrlForAuthorization(id: string, interaction?: string, loginHint?: string): string {
   const entry = interaction
     ? `${authorizationEntryPath(id)}?interaction=${encodeURIComponent(interaction)}`
     : authorizationEntryPath(id);
-  return `/auth/sign-in?${AUTHORIZATION_RETURN_PARAM}=${encodeURIComponent(entry)}`;
+  const params = new URLSearchParams({ [AUTHORIZATION_RETURN_PARAM]: entry });
+  if (loginHint) params.set("login_hint", loginHint);
+  return `/auth/sign-in?${params.toString()}`;
 }
 
 /** AS API path: fetch the in-flight authorization. */
@@ -26,9 +28,9 @@ export function authorizationApiPath(id: string): string {
   return `/api/authorizations/${encodeURIComponent(id)}`;
 }
 
-/** AS API path: submit decision against the in-flight authorization. */
-export function authorizationDecisionApiPath(id: string): string {
-  return `${authorizationApiPath(id)}/decision`;
+/** AS API path: report an interaction outcome against the in-flight authorization. */
+export function authorizationOutcomeApiPath(id: string): string {
+  return `${authorizationApiPath(id)}/outcome`;
 }
 
 export function clientDisplayName(client: Client): string {

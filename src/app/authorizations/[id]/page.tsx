@@ -1,13 +1,13 @@
 /**
  * /authorizations/[id] — entry point the AS redirects the user to for an
- * in-flight authorization transaction. Drives the user through whatever steps
- * are required (auth, consent), then submits the decision via server actions.
+ * in-flight authorization transaction.
  *
- * Branches:
- *   - id unknown to AS → "session expired"
- *   - needs auth and no session (or reauth required) → /auth/sign-in?next=...
- *   - prompt=none and signed-in → auto-approve, redirect to AS resume
- *   - otherwise → consent form
+ * The AS orchestrates two interactions; this page executes them:
+ *   1. authenticate — ensure a session that meets the requirement (else →
+ *      sign-in), then report the authenticated subject to the AS.
+ *   2. consent — render the scopes the AS says still need consent (already-granted
+ *      ones shown read-only for context); the server action reports the grant.
+ * If the AS replies `done` (nothing to consent), redirect straight to its resume.
  */
 
 import { headers } from "next/headers";
@@ -15,12 +15,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
   getAuthorization,
+  submitOutcome,
   verifyInteraction,
   AuthorizationNotFoundError,
-  type AuthorizationDetails,
-  type Scope,
+  type AuthorizationState,
 } from "@/lib/as-client";
-import { approveAuthorization, denyAuthorization } from "@/server/authorization-actions";
+import { approveConsent, denyConsent } from "@/server/authorization-actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConsentForm } from "@/components/consent-form";
 import { SplitLayout } from "@/components/layouts/split-layout";
@@ -31,26 +31,28 @@ type PageProps = {
   searchParams: Promise<{ interaction?: string }>;
 };
 
+type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
+
 export default async function AuthorizationPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const { interaction } = await searchParams;
   if (!interaction) return renderExpired();
 
-  // The interaction token carries the AS callback base. Verify it once here; the
-  // resulting asBase then flows to the fetch and (via the form) to the decision.
+  // The interaction token carries the AS callback base and request start time;
+  // verify it once here.
   let asBase: string;
+  let issuedAt: number;
   try {
-    asBase = await verifyInteraction(interaction, id);
+    ({ asBase, issuedAt } = await verifyInteraction(interaction, id));
   } catch {
     return renderExpired();
   }
 
-  // Read headers once, then fan out session lookup and AS fetch in parallel.
   const reqHeaders = await headers();
-  let details: AuthorizationDetails;
-  let session: Awaited<ReturnType<typeof auth.api.getSession>>;
+  let state: AuthorizationState;
+  let session: Session;
   try {
-    [details, session] = await Promise.all([
+    [state, session] = await Promise.all([
       getAuthorization(asBase, id),
       auth.api.getSession({ headers: reqHeaders }),
     ]);
@@ -59,31 +61,41 @@ export default async function AuthorizationPage({ params, searchParams }: PagePr
     throw err;
   }
 
-  const needsReauth =
-    (details.needs.includes("authentication") && !session?.user) ||
-    shouldForceReauth(details, session);
-  if (needsReauth) redirect(signInUrlForAuthorization(id, interaction));
-
-  // prompt=none — AS would have skipped UI if it had session info. Bridge by
-  // auto-approving with the current session; the server action redirects.
-  if (details.skip && session?.user) {
-    await approveAuthorization(buildSkipFormData(id, asBase, details.requested_scopes));
-    return null;
+  // Interaction 1 — authenticate: ensure a session that meets the requirement.
+  if (!session?.user || shouldForceReauth(state.authenticate, session, issuedAt)) {
+    redirect(signInUrlForAuthorization(id, interaction, state.authenticate.login_hint));
   }
 
+  // Report the authenticate outcome; the AS reconciles → consent or done.
+  const step = await submitOutcome(asBase, id, {
+    type: "authenticate",
+    subject: session.user.id,
+    amr: ["pwd"],
+    authenticated_at: authTime(session),
+    user_claims: {
+      sub: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      email_verified: session.user.emailVerified ?? false,
+    },
+  });
+  if (step.next === "done") redirect(step.redirect_to);
+
+  // Interaction 2 — consent: show what the AS says still needs consent.
   return (
     <SplitLayout
-      brandHeadline={`${clientDisplayName(details.client)} needs your permission.`}
+      brandHeadline={`${clientDisplayName(state.client)} needs your permission.`}
       brandSubhead="Review the requested permissions before continuing. You can deny at any time."
     >
       <ConsentForm
         authorizationId={id}
         asBase={asBase}
-        client={details.client}
-        subject={session?.user.email ?? session?.user.id ?? ""}
-        scopes={details.requested_scopes}
-        approveAction={approveAuthorization}
-        denyAction={denyAuthorization}
+        client={state.client}
+        subject={session.user.email ?? session.user.id}
+        newScopes={step.consent.new}
+        alreadyGranted={step.consent.already_granted}
+        approveAction={approveConsent}
+        denyAction={denyConsent}
       />
     </SplitLayout>
   );
@@ -109,22 +121,27 @@ function renderExpired() {
 }
 
 function shouldForceReauth(
-  details: { prompt?: string; max_age?: number },
-  session: { session?: { createdAt?: string | Date } } | null,
+  authenticate: AuthorizationState["authenticate"],
+  session: { session?: { createdAt?: string | Date } },
+  requestStartedAt: number,
 ): boolean {
-  if (!session?.session?.createdAt) return false;
-  if (details.prompt?.split(/\s+/).includes("login")) return true;
-  if (typeof details.max_age === "number" && details.max_age > 0) {
-    const ageSeconds = (Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
-    if (ageSeconds > details.max_age) return true;
+  if (!session.session?.createdAt) return false;
+  const authTimeSeconds = new Date(session.session.createdAt).getTime() / 1000;
+  // prompt=login: re-authenticate unless the session was established for this
+  // request (i.e. after it started) — otherwise the requirement never clears
+  // and the user loops back to sign-in.
+  if (authenticate.prompt?.split(/\s+/).includes("login")) {
+    return authTimeSeconds < requestStartedAt;
+  }
+  // max_age <= 0 carries no constraint (Authlete reports 0 when max_age is absent).
+  if (typeof authenticate.max_age === "number" && authenticate.max_age > 0) {
+    if (Date.now() / 1000 - authTimeSeconds > authenticate.max_age) return true;
   }
   return false;
 }
 
-function buildSkipFormData(id: string, asBase: string, scopes: Scope[]): FormData {
-  const fd = new FormData();
-  fd.set("authorization", id);
-  fd.set("as_base", asBase);
-  for (const s of scopes) fd.append("granted_scope", s.name);
-  return fd;
+function authTime(session: NonNullable<Session>): number {
+  return session.session.createdAt
+    ? Math.floor(new Date(session.session.createdAt).getTime() / 1000)
+    : Math.floor(Date.now() / 1000);
 }

@@ -1,10 +1,10 @@
 /**
  * Consent form — client component.
  *
- * Renders the upstream RP's identity + requested scopes with checkboxes
- * (default-checked, user can uncheck). Two submit buttons that invoke the
- * approve / deny server actions passed in via props (kept out of this file
- * so it stays pure UI; the server component owns the action binding).
+ * Renders the RP's identity, the scopes that still need consent (checkboxes,
+ * default-checked, user can uncheck), and any already-granted scopes read-only
+ * for context. Two submit buttons invoke the approve / deny server actions passed
+ * in via props (kept out of this file so it stays pure UI).
  */
 
 "use client";
@@ -22,7 +22,8 @@ type Props = {
   asBase: string;
   client: Client;
   subject: string;
-  scopes: Scope[];
+  newScopes: Scope[];
+  alreadyGranted: Scope[];
   approveAction: (formData: FormData) => Promise<void>;
   denyAction: (formData: FormData) => Promise<void>;
 };
@@ -32,11 +33,12 @@ export function ConsentForm({
   asBase,
   client,
   subject,
-  scopes,
+  newScopes,
+  alreadyGranted,
   approveAction,
   denyAction,
 }: Props) {
-  const [granted, setGranted] = useState<Set<string>>(new Set(scopes.map((s) => s.name)));
+  const [granted, setGranted] = useState<Set<string>>(new Set(newScopes.map((s) => s.name)));
 
   const toggle = (name: string) => {
     setGranted((prev) => {
@@ -56,28 +58,34 @@ export function ConsentForm({
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">It is requesting the following permissions:</p>
         <div className="space-y-3">
-          {scopes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No scopes requested.</p>
-          ) : (
-            scopes.map((s) => (
-              <div key={s.name} className="flex items-start gap-3">
-                <Checkbox
-                  id={`scope-${s.name}`}
-                  checked={granted.has(s.name)}
-                  onCheckedChange={() => toggle(s.name)}
-                />
-                <div className="grid gap-1 leading-none">
-                  <Label htmlFor={`scope-${s.name}`} className="font-medium">
-                    {s.name}
-                  </Label>
-                  {s.description ? (
-                    <p className="text-xs text-muted-foreground">{s.description}</p>
-                  ) : null}
-                </div>
+          {newScopes.map((s) => (
+            <div key={s.name} className="flex items-start gap-3">
+              <Checkbox
+                id={`scope-${s.name}`}
+                checked={granted.has(s.name)}
+                onCheckedChange={() => toggle(s.name)}
+              />
+              <div className="grid gap-1 leading-none">
+                <Label htmlFor={`scope-${s.name}`} className="font-medium">
+                  {s.name}
+                </Label>
+                {s.description ? (
+                  <p className="text-xs text-muted-foreground">{s.description}</p>
+                ) : null}
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
+        {alreadyGranted.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Already granted</p>
+            <ul className="text-xs text-muted-foreground">
+              {alreadyGranted.map((s) => (
+                <li key={s.name}>{s.name}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {(client.policy_uri || client.tos_uri) && (
           <p className="text-xs text-muted-foreground">
             {client.policy_uri && (

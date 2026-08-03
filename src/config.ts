@@ -26,6 +26,11 @@ export const config = {
   databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
   port: parseInt(optional("PORT", "3001"), 10),
   nodeEnv: optional("NODE_ENV", "development"),
+  // Email. Optional in dev: with no RESEND_API_KEY, auth emails are logged to
+  // the console instead of sent (see src/lib/email.ts), so local dev needs no
+  // provider — the console is to email what the file: DB is to libSQL.
+  resendApiKey: process.env.RESEND_API_KEY || undefined,
+  emailFrom: optional("EMAIL_FROM", "Auth UI <onboarding@resend.dev>"),
 } as const;
 
 // Two inputs: the AS's issuer id (its stable identity — the trust anchor, and the

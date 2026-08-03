@@ -14,6 +14,7 @@ import { nextCookies } from "better-auth/next-js";
 import { multiSession } from "better-auth/plugins";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { config } from "@/config";
+import { sendEmail } from "@/lib/email";
 
 const dialect = new LibsqlDialect({
   url: config.databaseUrl,
@@ -22,7 +23,20 @@ const dialect = new LibsqlDialect({
 
 export const auth = betterAuth({
   database: { dialect, type: "sqlite" },
-  emailAndPassword: { enabled: true },
+  emailAndPassword: {
+    enabled: true,
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({ to: user.email, subject: "Reset your password", text: `Reset your password:\n${url}` });
+    },
+  },
+  // Sends a verification link on sign-up. Not required for sign-in yet (flip
+  // requireEmailVerification on emailAndPassword to enforce it).
+  emailVerification: {
+    sendOnSignUp: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendEmail({ to: user.email, subject: "Verify your email", text: `Verify your email:\n${url}` });
+    },
+  },
   advanced: {
     useSecureCookies: config.nodeEnv === "production",
   },

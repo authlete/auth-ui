@@ -18,10 +18,7 @@ export default async function SettingsPage({ params }: PageProps) {
   if (!VALID_SETTINGS_PATHS.has(path)) notFound();
 
   return (
-    <AppShell
-      title="Settings"
-      description="Manage your account profile and security."
-    >
+    <AppShell title="Settings" description="Manage your account profile and security.">
       <Settings path={path} />
     </AppShell>
   );

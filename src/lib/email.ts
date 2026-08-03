@@ -10,7 +10,11 @@ import { config } from "@/config";
 
 const resend = config.resendApiKey ? new Resend(config.resendApiKey) : null;
 
-export async function sendEmail(opts: { to: string; subject: string; text: string }): Promise<void> {
+export async function sendEmail(opts: {
+  to: string;
+  subject: string;
+  text: string;
+}): Promise<void> {
   if (!resend) {
     console.log(`\n📧 [dev email] → ${opts.to}\n   ${opts.subject}\n   ${opts.text}\n`);
     return;

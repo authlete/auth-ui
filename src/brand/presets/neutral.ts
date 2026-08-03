@@ -23,8 +23,7 @@ export const neutral: Brand = {
     ring: "hsl(210 40% 90%)",
   },
   panel: {
-    background:
-      "linear-gradient(135deg, hsl(222 30% 11%) 0%, hsl(222 24% 18%) 100%)",
+    background: "linear-gradient(135deg, hsl(222 30% 11%) 0%, hsl(222 24% 18%) 100%)",
     headline: "A white-label sign-in experience.",
     subhead: "Unbranded by default — themeable from a single config, or replace it entirely.",
     bullets: [],

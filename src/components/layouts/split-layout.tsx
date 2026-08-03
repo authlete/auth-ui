@@ -55,9 +55,7 @@ function BrandPanel({ headline, subhead }: { headline: string; subhead: string }
           </ul>
         )}
       </div>
-      <p className="absolute bottom-10 left-12 text-xs text-white/60">
-        {activeBrand.panel.footer}
-      </p>
+      <p className="absolute bottom-10 left-12 text-xs text-white/60">{activeBrand.panel.footer}</p>
     </aside>
   );
 }

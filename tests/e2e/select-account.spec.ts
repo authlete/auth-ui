@@ -48,7 +48,11 @@ async function registerClient(asBase: string): Promise<string | null> {
 
 /** Start an authorize with prompt=select_account; returns the auth-ui URL the AS redirects to. */
 async function selectAccountAuthorizeUrl(asBase: string, clientId: string): Promise<string> {
-  const codeChallenge = b64url(createHash("sha256").update(b64url(randomBytes(48))).digest());
+  const codeChallenge = b64url(
+    createHash("sha256")
+      .update(b64url(randomBytes(48)))
+      .digest(),
+  );
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
@@ -70,7 +74,7 @@ async function signUp(page: Page, email: string, name: string) {
   await page.fill("input[name=name]", name);
   await page.fill("input[name=email]", email);
   await page.fill("input[name=password]", PASSWORD);
-  await page.click('button[type=submit]');
+  await page.click("button[type=submit]");
   await page.waitForURL("/", { timeout: 15_000 });
 }
 
@@ -95,7 +99,10 @@ test.describe("OIDC prompt=select_account (requires paired AS on :3000)", () => 
     if (AS_BASE_URL) clientId = await registerClient(AS_BASE_URL);
   });
 
-  test("chooser lists signed-in accounts; selection drives consent → RP code", async ({ page, context }) => {
+  test("chooser lists signed-in accounts; selection drives consent → RP code", async ({
+    page,
+    context,
+  }) => {
     test.skip(!AS_BASE_URL, "AS_BASE_URL not set — paired AS unavailable");
     test.skip(!clientId, "Paired AS not reachable on AS_BASE_URL — start it on :3000");
 
@@ -111,7 +118,7 @@ test.describe("OIDC prompt=select_account (requires paired AS on :3000)", () => 
     await page.fill("input[name=name]", "Bob B");
     await page.fill("input[name=email]", b);
     await page.fill("input[name=password]", PASSWORD);
-    await page.click('button[type=submit]');
+    await page.click("button[type=submit]");
     await page.waitForURL("/", { timeout: 15_000 });
 
     const rpCallback = captureRpCallback(context, page);

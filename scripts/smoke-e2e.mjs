@@ -135,7 +135,8 @@ ok("interaction as_base", asBase);
 // 3) Two interactions: authenticate, then consent (first grant → consent needed)
 step(3, "auth-ui reports authenticate + consent outcomes");
 const authStep = await postOutcome(asBase, authzId, authenticateOutcome);
-if (authStep.next !== "consent") fail("expected next=consent on first grant, got", JSON.stringify(authStep));
+if (authStep.next !== "consent")
+  fail("expected next=consent on first grant, got", JSON.stringify(authStep));
 ok("authenticate → consent", `new: ${authStep.consent.new.map((s) => s.name).join(", ")}`);
 const consentStep = await postOutcome(asBase, authzId, {
   type: "consent",
@@ -179,9 +180,11 @@ const ui = await fetch(`${AS_BASE_URL}/oauth/userinfo`, {
   headers: { authorization: `Bearer ${codeExchange.access_token}` },
 }).then((r) => r.json());
 console.log("  Response body:", JSON.stringify(ui, null, 2));
-ui.sub === userId && ui.email === email
-  ? ok("live claims round-tripped end-to-end")
-  : console.error("  ❌ claims wrong or missing");
+if (ui.sub === userId && ui.email === email) {
+  ok("live claims round-tripped end-to-end");
+} else {
+  console.error("  ❌ claims wrong or missing");
+}
 
 // 7) /introspect
 step(7, "RS introspects access_token via /oauth/introspect");
@@ -215,8 +218,10 @@ ok("status after revoke", String(ui2.status) + " (expecting 401)");
 step(10, "Incremental consent (same user + scopes → consent skipped)");
 const again = await startAuthorization();
 const authStep2 = await postOutcome(again.asBase, again.authzId, authenticateOutcome);
-authStep2.next === "done"
-  ? ok("consent skipped — all requested scopes already granted")
-  : fail("expected next=done (nothing new to consent), got", JSON.stringify(authStep2));
+if (authStep2.next === "done") {
+  ok("consent skipped — all requested scopes already granted");
+} else {
+  fail("expected next=done (nothing new to consent), got", JSON.stringify(authStep2));
+}
 
 console.log("\n══════════════════  E2E COMPLETE  ══════════════════\n");

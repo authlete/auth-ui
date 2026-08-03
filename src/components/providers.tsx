@@ -58,12 +58,14 @@ export function Providers({
             else router.push(to);
             router.refresh();
           }}
-          Link={Link as unknown as React.ComponentType<{
-            className?: string;
-            href: string;
-            to?: string;
-            children?: React.ReactNode;
-          }>}
+          Link={
+            Link as unknown as React.ComponentType<{
+              className?: string;
+              href: string;
+              to?: string;
+              children?: React.ReactNode;
+            }>
+          }
         >
           {children}
         </AuthProvider>

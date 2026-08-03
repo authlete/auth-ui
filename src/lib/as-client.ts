@@ -96,7 +96,9 @@ async function asFetch(
   });
   if (res.status === 404) throw new AuthorizationNotFoundError(authorizationId);
   if (!res.ok) {
-    throw new Error(`AS ${init.method ?? "GET"} ${path} returned ${res.status}: ${await res.text()}`);
+    throw new Error(
+      `AS ${init.method ?? "GET"} ${path} returned ${res.status}: ${await res.text()}`,
+    );
   }
   return res;
 }
@@ -106,7 +108,11 @@ export async function getAuthorization(asBase: string, id: string): Promise<Auth
   return (await res.json()) as AuthorizationState;
 }
 
-export async function submitOutcome(asBase: string, id: string, outcome: Outcome): Promise<NextStep> {
+export async function submitOutcome(
+  asBase: string,
+  id: string,
+  outcome: Outcome,
+): Promise<NextStep> {
   // The outcome lives in the JWT claims, not in an HTTP body — the signature
   // binds it to this request. The AS replies with the next step.
   const res = await asFetch(

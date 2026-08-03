@@ -26,7 +26,11 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
-      await sendEmail({ to: user.email, subject: "Reset your password", text: `Reset your password:\n${url}` });
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your password",
+        text: `Reset your password:\n${url}`,
+      });
     },
   },
   // Sends a verification link on sign-up. Not required for sign-in yet (flip
@@ -34,7 +38,11 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await sendEmail({ to: user.email, subject: "Verify your email", text: `Verify your email:\n${url}` });
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your email",
+        text: `Verify your email:\n${url}`,
+      });
     },
   },
   // Env-gated (see config.ts). Empty when no provider env is set — callback

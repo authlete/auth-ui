@@ -25,16 +25,10 @@ export default async function Home() {
   if (!session?.user) redirect("/auth/sign-in");
 
   return (
-    <AppShell
-      title="Account"
-      description="Manage your profile and signed-in accounts."
-    >
+    <AppShell title="Account" description="Manage your profile and signed-in accounts.">
       <div className="space-y-6">
         <Settings view="account" hideNav />
-        <Link
-          href="/auth/sign-in"
-          className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
-        >
+        <Link href="/auth/sign-in" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
           <UserPlus2 className="size-4" />
           Add another account
         </Link>

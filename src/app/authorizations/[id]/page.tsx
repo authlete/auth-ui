@@ -25,7 +25,11 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { ConsentForm } from "@/components/consent-form";
 import { AccountChooser } from "@/components/account-chooser";
 import { SplitLayout } from "@/components/layouts/split-layout";
-import { clientDisplayName, signInUrlForAuthorization, ACCOUNT_SELECTED_PARAM } from "@/lib/authorization";
+import {
+  clientDisplayName,
+  signInUrlForAuthorization,
+  ACCOUNT_SELECTED_PARAM,
+} from "@/lib/authorization";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -142,8 +146,8 @@ function renderExpired() {
         <CardHeader>
           <CardTitle>Session expired</CardTitle>
           <CardDescription>
-            This authorization request has expired or was already completed.
-            Please return to the application and try again.
+            This authorization request has expired or was already completed. Please return to the
+            application and try again.
           </CardDescription>
         </CardHeader>
       </Card>

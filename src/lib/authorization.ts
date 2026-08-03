@@ -33,7 +33,11 @@ export function authorizationEntryUrl(
  * the URL, carries it across the sign-in↔sign-up links, and redirects there on
  * success, so no custom redirect wrapper is needed.
  */
-export function signInUrlForAuthorization(id: string, interaction?: string, loginHint?: string): string {
+export function signInUrlForAuthorization(
+  id: string,
+  interaction?: string,
+  loginHint?: string,
+): string {
   const entry = interaction
     ? `${authorizationEntryPath(id)}?interaction=${encodeURIComponent(interaction)}`
     : authorizationEntryPath(id);

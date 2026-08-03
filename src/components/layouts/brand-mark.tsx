@@ -21,16 +21,24 @@ export function BrandMark({ className }: { className?: string }) {
     );
   }
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-      className={cn("h-6 w-6", className)}
-    >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={cn("h-6 w-6", className)}>
       <rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" opacity="0.12" />
-      <rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4.25" stroke="currentColor" strokeWidth="1.5" />
+      <rect
+        x="3.75"
+        y="3.75"
+        width="16.5"
+        height="16.5"
+        rx="4.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
       <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7.5 17c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M7.5 17c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

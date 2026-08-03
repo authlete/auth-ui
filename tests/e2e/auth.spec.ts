@@ -26,7 +26,7 @@ async function signUp(page: Page, email: string, name: string) {
   await page.fill("input[name=name]", name);
   await page.fill("input[name=email]", email);
   await page.fill("input[name=password]", PASSWORD);
-  await page.click('button[type=submit]');
+  await page.click("button[type=submit]");
   await page.waitForURL("/", { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
 }
@@ -34,7 +34,7 @@ async function signUp(page: Page, email: string, name: string) {
 async function signIn(page: Page, email: string) {
   await page.fill("input[name=email]", email);
   await page.fill("input[name=password]", PASSWORD);
-  await page.click('button[type=submit]');
+  await page.click("button[type=submit]");
 }
 
 /** The account home renders a Settings "Sign Out" button; sign out the active session. */
@@ -58,7 +58,9 @@ test("anonymous users are gated to sign-in with no signed-out theme toggle", asy
   await expect(page.getByRole("button", { name: /Continue with/i })).toHaveCount(0);
 });
 
-test("sign-up lands on account home, exposes native theme control, and sign-out redirects", async ({ page }) => {
+test("sign-up lands on account home, exposes native theme control, and sign-out redirects", async ({
+  page,
+}) => {
   const email = uniqueEmail();
   await signUp(page, email, "Nova One");
 
@@ -86,7 +88,9 @@ test("native redirectTo returns the user to the requested page after sign-in", a
   await expect(page).toHaveURL(/\/settings\/security/, { timeout: 15_000 });
 });
 
-test("multi-session: add a second account, switch on sign-out, redirect on final sign-out", async ({ page }) => {
+test("multi-session: add a second account, switch on sign-out, redirect on final sign-out", async ({
+  page,
+}) => {
   const a = uniqueEmail();
   const b = uniqueEmail();
 
@@ -100,7 +104,7 @@ test("multi-session: add a second account, switch on sign-out, redirect on final
   await page.fill("input[name=name]", "Bob B");
   await page.fill("input[name=email]", b);
   await page.fill("input[name=password]", PASSWORD);
-  await page.click('button[type=submit]');
+  await page.click("button[type=submit]");
   await page.waitForURL("/", { timeout: 15_000 });
 
   // Active account is the newly-added B; the switcher lists both.

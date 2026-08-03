@@ -1,0 +1,13 @@
+.next
+dist
+data
+node_modules
+test-results
+playwright-report
+package-lock.json
+*.md
+
+# Registry-managed components (shadcn / better-auth-ui) — keep upstream style
+src/components/ui
+src/components/auth
+src/lib/auth

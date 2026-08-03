@@ -22,13 +22,7 @@
  */
 
 import "server-only";
-import {
-  SignJWT,
-  jwtVerify,
-  createRemoteJWKSet,
-  importJWK,
-  type JWTPayload,
-} from "jose";
+import { SignJWT, jwtVerify, createRemoteJWKSet, importJWK, type JWTPayload } from "jose";
 import { randomUUID } from "node:crypto";
 import { getInteractionProtocolConfig } from "@/config";
 import { parseJwks, resolveSigningKey } from "./jwks";

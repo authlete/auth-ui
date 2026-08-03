@@ -65,7 +65,9 @@ export function AccountChooser({
                   {account.name || account.email}
                 </span>
                 {account.name ? (
-                  <span className="block truncate text-xs text-muted-foreground">{account.email}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {account.email}
+                  </span>
                 ) : null}
               </span>
             </button>

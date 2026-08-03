@@ -30,11 +30,11 @@ const adapterPromise: Promise<BetterAuthAdapter> = (
   auth as unknown as { $context: Promise<{ adapter: BetterAuthAdapter }> }
 ).$context.then((ctx) => ctx.adapter);
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const jwt = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const jwt = request.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
   if (!jwt) return unauthorized("missing Authorization Bearer JWT");
   try {
     await verifyJwt(jwt);

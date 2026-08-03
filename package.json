@@ -10,7 +10,9 @@
     "start": "next start -p ${PORT:-3001}",
     "migrate": "better-auth migrate -y",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "engines": {
     "node": ">=20"
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@better-auth/cli": "^1.4.21",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.0.0",
     "@types/react": "^19",

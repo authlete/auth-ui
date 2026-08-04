@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import type { SocialProvider } from "better-auth/social-providers";
+import { multiSessionMutationKeys } from "@better-auth-ui/core/plugins";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { multiSessionPlugin } from "@/lib/auth/multi-session-plugin";
 import { themePlugin } from "@/lib/auth/theme-plugin";
@@ -59,13 +60,24 @@ export function Providers({
   const router = useRouter();
   const queryClient = getQueryClient();
 
-  // Better Auth mutations don't refetch their React Query data in the App Router
-  // (better-auth#3608), so refetch on any success to keep session/accounts fresh.
+  // better-auth-ui keys the device list per active user and only invalidates the
+  // pre-revoke user's key; revoking the active session flips the user, leaving the
+  // new list stale. Refetch the list (all users) + session on revoke only — never
+  // setActive, whose blanket invalidation used to loop.
+  const revokeKey = multiSessionMutationKeys.revoke.join("/");
   useEffect(() => {
     return queryClient.getMutationCache().subscribe((event) => {
-      if (event?.mutation?.state.status === "success") queryClient.invalidateQueries();
+      if (event.type !== "updated" || event.action?.type !== "success") return;
+      const key = event.mutation.options.mutationKey;
+      if (!Array.isArray(key) || key.join("/") !== revokeKey) return;
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const k = query.queryKey as unknown[];
+          return (k[0] === "auth" && k[1] === "getSession") || k.includes("multiSession");
+        },
+      });
     });
-  }, [queryClient]);
+  }, [queryClient, revokeKey]);
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

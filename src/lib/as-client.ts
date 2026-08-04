@@ -3,7 +3,8 @@
  *
  * Server-only. Each call signs a fresh JWT that carries the operation payload
  * and serves as the Bearer credential — there is no intermediate access token.
- * See INTERACTION_PROTOCOL.md §7.
+ * Spec: the "Operations" section of INTERACTION_PROTOCOL.md in the
+ * typescript-oauth-server repo.
  */
 
 import "server-only";

@@ -6,19 +6,9 @@
  *   - verifyJwt: verifies a JWT received from the AS against the AS's
  *     published JWKS (fetched from <AS_ISSUER_ID>/.well-known/jwks.json).
  *
- * Standard envelope claims (iss, sub, aud, iat, exp, jti) are applied per
- * INTERACTION_PROTOCOL.md §4. Per-operation claims are passed in as the payload.
- *
- * TODO(naming): `signJwt` / `verifyJwt` are placeholder names. These JWTs are
- * per-request signed credentials that also carry an operation payload
- * (decision, authorization id, etc.) between AS and auth-ui — they are NOT
- * generic JWTs. Settle on a purpose-naming pass when the protocol stabilises.
- * Candidates considered:
- *   - `assertion` (RFC 7521/7523 heritage; matches the `private_key_jwt`
- *     primitive applied per-call)
- *   - `proof` (RFC 9449 DPoP-style single-use signed JWT)
- *   - `signedRequest` (descriptive; no spec baggage)
- *   - `signedMessage` (plain language)
+ * Standard envelope claims (iss, sub, aud, iat, exp, jti) are applied per the
+ * spec's "JWT envelope" section. Per-operation claims are passed in as the
+ * payload. Spec: INTERACTION_PROTOCOL.md in the typescript-oauth-server repo.
  */
 
 import "server-only";
@@ -35,6 +25,8 @@ const CLOCK_TOLERANCE_SECONDS = 5;
 type SigningKey = Awaited<ReturnType<typeof importJWK>>;
 type ResolvedSigningKey = { key: SigningKey; kid: string; alg: string };
 
+// The signing keypair and the AS peer are deployment-level — one per process —
+// so these lazy caches are deliberately module-scoped.
 let signingKeyPromise: Promise<ResolvedSigningKey> | undefined;
 let remoteAsJwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 
@@ -43,7 +35,7 @@ async function getSigningKey(): Promise<ResolvedSigningKey> {
     signingKeyPromise = (async () => {
       const cfg = getInteractionProtocolConfig();
       const jwks = parseJwks(cfg.authUiJwks);
-      const jwk = resolveSigningKey(jwks, { alg: "ES256" });
+      const jwk = resolveSigningKey(jwks, "ES256");
       if (!jwk.kid) throw new Error("auth-ui signing JWK must include a kid");
       const key = await importJWK(jwk, jwk.alg ?? "ES256");
       return { key, kid: jwk.kid, alg: jwk.alg ?? "ES256" };

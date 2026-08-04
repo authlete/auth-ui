@@ -9,6 +9,8 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3001}",
     "migrate": "better-auth migrate -y",
+    "setup": "node scripts/setup.mjs",
+    "keygen": "node scripts/keygen.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:e2e": "playwright test",

@@ -25,6 +25,9 @@ export async function approveConsent(formData: FormData): Promise<void> {
   const asBase = requireField(formData, "as_base", "approveConsent");
   const grantedScopes = formData.getAll("granted_scope").map((v) => String(v));
 
+  // TODO(claims-leakage): the outcome carries granted_scopes only. Per-claim
+  // consent needs a granted_claims list here, which the AS forwards to Authlete
+  // as consentedClaims (see the AS's routes/userinfo.ts TODO).
   const step = await submitOutcome(asBase, id, { type: "consent", granted_scopes: grantedScopes });
   if (step.next === "done") redirect(step.redirect_to);
 }

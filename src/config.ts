@@ -63,7 +63,11 @@ export const config = {
 // Two inputs: the AS's issuer id (its stable identity — the trust anchor, and the
 // origin its JWKS is fetched from) and auth-ui's own signing key. auth-ui's own
 // identity is its base URL. The AS's per-request callback URL rides the interaction
-// token (INTERACTION_PROTOCOL.md §1), not this config.
+// token (INTERACTION_PROTOCOL.md §1, in the typescript-oauth-server repo), not
+// this config.
+// TODO(naming): AS_ISSUER_ID vs the smoke/test-only AS_BASE_URL — reconcile to
+// one convention (the AS side calls its peer var AUTH_UI_URL). Deferred: both
+// names are wired into existing deployments (Vercel).
 export function getInteractionProtocolConfig() {
   const asIssuerId = optional("AS_ISSUER_ID", "http://localhost:3000");
   return {

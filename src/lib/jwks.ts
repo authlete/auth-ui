@@ -3,8 +3,10 @@
  *
  * Server-side only. Owns:
  *   - parsing the private JWKS from env into structured keys,
- *   - selecting the signing key by the resolver rules in INTERACTION_PROTOCOL.md §5,
+ *   - selecting the signing key by the spec's "Key resolution" rules,
  *   - producing the public JWKS for publication at /.well-known/jwks.json.
+ *
+ * Spec: INTERACTION_PROTOCOL.md in the typescript-oauth-server repo.
  */
 
 import "server-only";
@@ -31,24 +33,14 @@ export function parseJwks(raw: string): JWKS {
 }
 
 /**
- * Resolve a signing key from the local JWKS using the rules:
- *   1. explicit kid match
- *   2. only one key in the set
- *   3. first key whose `alg` matches the configured signing alg
- *   4. first key in the set
+ * Resolve the signing key from the local JWKS (spec: "Key resolution"):
+ *   1. the only key in the set, if there is exactly one
+ *   2. else the first key whose `alg` matches the signing alg
+ *   3. else the first key in the set
  */
-export function resolveSigningKey(jwks: JWKS, opts: { kid?: string; alg?: string }): JWK {
-  if (opts.kid) {
-    const byKid = jwks.keys.find((k) => k.kid === opts.kid);
-    if (!byKid) throw new Error(`No JWK with kid=${opts.kid} in configured JWKS`);
-    return byKid;
-  }
+export function resolveSigningKey(jwks: JWKS, alg: string): JWK {
   if (jwks.keys.length === 1) return jwks.keys[0]!;
-  if (opts.alg) {
-    const byAlg = jwks.keys.find((k) => k.alg === opts.alg);
-    if (byAlg) return byAlg;
-  }
-  return jwks.keys[0]!;
+  return jwks.keys.find((k) => k.alg === alg) ?? jwks.keys[0]!;
 }
 
 /** Strip private fields from a JWKS, producing the public JWKS for publication. */

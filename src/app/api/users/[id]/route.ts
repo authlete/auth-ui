@@ -3,7 +3,8 @@
  *
  * Live user resource lookup called by the AS at /userinfo time. Inbound JWT
  * auth verified against the AS's published JWKS. Returns a flat user resource;
- * the AS owns the OIDC-claim projection. See INTERACTION_PROTOCOL.md §7.3.
+ * the AS owns the OIDC-claim projection. Spec: INTERACTION_PROTOCOL.md §4
+ * (in the typescript-oauth-server repo).
  */
 
 import { NextResponse } from "next/server";

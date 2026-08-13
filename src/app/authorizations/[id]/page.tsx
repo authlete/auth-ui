@@ -5,8 +5,8 @@
  * The AS orchestrates two interactions; this page executes them:
  *   1. authenticate — ensure a session that meets the requirement (else →
  *      sign-in), then report the authenticated subject to the AS.
- *   2. consent — render the scopes the AS says still need consent (already-granted
- *      ones shown read-only for context); the server action reports the grant.
+ *   2. consent — render the scopes and authorization_details the AS relays from
+ *      Authlete; the server action reports the grant.
  * If the AS replies `done` (nothing to consent), redirect straight to its resume.
  */
 
@@ -22,8 +22,8 @@ import {
 } from "@/lib/as-client";
 import { approveConsent, denyConsent, selectAccount } from "@/server/authorization-actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConsentForm } from "@/components/consent-form";
-import { AccountChooser } from "@/components/account-chooser";
+import { ConsentForm } from "@/components/authorization/consent-form";
+import { AccountChooser } from "@/components/authorization/account-chooser";
 import { SplitLayout } from "@/components/layouts/split-layout";
 import {
   clientDisplayName,
@@ -128,7 +128,7 @@ export default async function AuthorizationPage({ params, searchParams }: PagePr
         client={state.client}
         subject={session.user.email ?? session.user.id}
         newScopes={step.consent.new}
-        alreadyGranted={step.consent.already_granted}
+        authorizationDetails={step.consent.authorization_details ?? []}
         approveAction={approveConsent}
         denyAction={denyConsent}
       />

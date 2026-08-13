@@ -8,23 +8,13 @@
  * Real users reach the app via /authorizations/[id] from the AS, not this page.
  */
 
-import Link from "next/link";
-import { UserPlus2 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
 import { Settings } from "@/components/auth/settings/settings";
 import { AppShell } from "@/components/layouts/app-shell";
-import { cn } from "@/lib/utils";
 
 export default function Home() {
   return (
     <AppShell title="Account" description="Manage your profile and signed-in accounts.">
-      <div className="space-y-6">
-        <Settings view="account" hideNav />
-        <Link href="/auth/sign-in" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
-          <UserPlus2 className="size-4" />
-          Add another account
-        </Link>
-      </div>
+      <Settings view="account" hideNav />
     </AppShell>
   );
 }

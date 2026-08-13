@@ -64,6 +64,7 @@ Ships unbranded. Rebrand from one file:
 
 - [`src/brand/brand.ts`](src/brand/brand.ts) is the single source of truth — product name, logo, font, colors, sign-in panel copy. Colors flow into CSS variables; nothing else hardcodes a brand value.
 - Set `logoMark` to an image in `/public/brand`, or keep the built-in neutral mark.
+- Consent wording — scope and permission labels — lives in [`src/lib/consent-labels.ts`](src/lib/consent-labels.ts), one file to localize or relabel.
 - Or replace the UI entirely — anything that speaks the same protocol to the AS works.
 
 ## What you own vs what's managed
@@ -75,7 +76,7 @@ Most files in this repo are **managed** — installed from the [better-auth-ui](
 | `src/components/auth/`, `src/components/ui/` | **Managed** — registry-installed; don't hand-edit, update by re-installing |
 | `src/lib/auth/` | Mixed — registry plugins + a few owned hooks |
 | `src/brand/` | **Owned** — the white-label surface (see below) |
-| everything else in `src/` | **Owned** — Better Auth config, email transport, and the AS interaction protocol (`lib/jws`, `lib/jwks`, `lib/as-client`, `app/authorizations`, `app/api/users`) |
+| everything else in `src/` | **Owned** — Better Auth config, email transport, and the AS interaction protocol (`lib/jws`, `lib/jwks`, `lib/as-client`, `app/authorizations`, `app/apps`, `app/api/users`) |
 
 Update managed code by re-installing, never by editing:
 
@@ -104,16 +105,24 @@ auth-ui holds the user session (Better Auth), not the OAuth transaction. It spea
 - `GET  /api/users/{id}` — resolve user claims (AS → auth-ui)
 - `GET  /.well-known/jwks.json` — auth-ui's public keys (AS → auth-ui)
 
+Beyond the auth/consent transaction, auth-ui also renders a **connected-apps** screen (`/apps`) to review and revoke granted access, over an AS management API (same mutual JWT):
+
+- `GET    /api/authorized-apps` — list a user's granted apps (auth-ui → AS)
+- `DELETE /api/authorized-apps/{clientId}` — revoke an app's access (auth-ui → AS)
+
 **Why:** the AS stays implementation-portable (Node service, sidecar, gateway, edge worker), while authentication (MFA, passkeys, federation) and consent (per-claim, RAR, grant management) evolve entirely in auth-ui — none of which the AS ever sees.
 
 ## Roadmap
 
-Supported today (all from the registry): email/password, email verification, password reset, multi-account device sessions, **TOTP 2FA + backup codes**, and env-gated **social / OIDC sign-in** (Google, Microsoft, …).
+Supported today:
+
+- From the registry: email/password, email verification, password reset, multi-account device sessions, **TOTP 2FA + backup codes**, env-gated **social / OIDC sign-in** (Google, Microsoft, …).
+- Consent: **RAR consent capture** (renders `authorization_details`) and a **connected-apps panel** (`/apps`) to review and revoke granted access.
 
 Planned:
 
 - **Passkeys** (WebAuthn) · **Magic link** · **custom-issuer OIDC** (Okta/Auth0 via discovery)
-- **Richer consent** — per-claim choices, RAR, persistent grant management
+- **Richer consent** — Persistent grant lifecyle management (RAR consent capture shipped)
 - **Account recovery / step-up**
 
 ## License

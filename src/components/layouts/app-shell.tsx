@@ -6,10 +6,15 @@
  */
 
 import Link from "next/link";
+import { AppWindow } from "lucide-react";
 import type { ReactNode } from "react";
 import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
 import { UserButton } from "@/components/auth/user/user-button";
+
+const USER_LINKS = [
+  { label: "Connected apps", href: "/apps", icon: <AppWindow className="size-4" /> },
+];
 
 type Props = {
   children: ReactNode;
@@ -26,7 +31,7 @@ export function AppShell({ children, title, description }: Props) {
             <BrandMark />
             <span>{activeBrand.productName}</span>
           </Link>
-          <UserButton size="icon" />
+          <UserButton size="icon" links={USER_LINKS} />
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-10">

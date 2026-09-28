@@ -6,13 +6,14 @@
  */
 
 import Link from "next/link";
-import { AppWindow } from "lucide-react";
+import { AppWindow, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { activeBrand } from "@/brand/brand";
 import { BrandMark } from "./brand-mark";
 import { UserButton } from "@/components/auth/user/user-button";
 
 const USER_LINKS = [
+  { label: "Sign-in requests", href: "/requests", icon: <ShieldCheck className="size-4" /> },
   { label: "Connected apps", href: "/apps", icon: <AppWindow className="size-4" /> },
 ];
 

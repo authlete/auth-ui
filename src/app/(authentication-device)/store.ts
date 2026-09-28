@@ -16,20 +16,10 @@ export type PendingRequest = {
   expires_at: number;
 };
 
+// Table is created by `npm run migrate` (see ./migrate.mjs), not at runtime.
 const db = createClient({ url: config.databaseUrl, authToken: config.databaseAuthToken });
 
-let ready: Promise<unknown> | undefined;
-const init = () =>
-  (ready ??= db.execute(`CREATE TABLE IF NOT EXISTS ciba_request (
-    ticket     TEXT PRIMARY KEY,
-    login_hint TEXT,
-    expires_at INTEGER NOT NULL,
-    status     TEXT NOT NULL DEFAULT 'pending',
-    payload    TEXT NOT NULL
-  )`));
-
 export async function savePending(req: PendingRequest): Promise<void> {
-  await init();
   await db.execute({
     sql: `INSERT OR REPLACE INTO ciba_request (ticket, login_hint, expires_at, status, payload)
           VALUES (?, ?, ?, 'pending', ?)`,
@@ -39,7 +29,6 @@ export async function savePending(req: PendingRequest): Promise<void> {
 
 // login_hint is the AS's identifier for the account, matched against the user.
 export async function listPendingForUser(hints: string[]): Promise<PendingRequest[]> {
-  await init();
   const now = Math.floor(Date.now() / 1000);
   const { rows } = await db.execute({
     sql: `SELECT payload FROM ciba_request
@@ -52,7 +41,6 @@ export async function listPendingForUser(hints: string[]): Promise<PendingReques
 }
 
 export async function getPending(ticket: string): Promise<PendingRequest | null> {
-  await init();
   const { rows } = await db.execute({
     sql: `SELECT payload FROM ciba_request WHERE ticket = ?`,
     args: [ticket],
@@ -61,7 +49,6 @@ export async function getPending(ticket: string): Promise<PendingRequest | null>
 }
 
 export async function markResolved(ticket: string, status: "approved" | "denied"): Promise<void> {
-  await init();
   await db.execute({
     sql: `UPDATE ciba_request SET status = ? WHERE ticket = ?`,
     args: [status, ticket],

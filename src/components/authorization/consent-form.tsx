@@ -9,10 +9,7 @@ import {
 } from "@/components/ui/card";
 import type { Client, RarElement, Scope } from "@/lib/as-client";
 import { clientDisplayName } from "@/lib/authorization";
-import { isPaymentType, orderedScopes } from "@/lib/consent-labels";
-import { scopeIcon } from "@/lib/scope-icons";
-import { cn } from "@/lib/utils";
-import { DataPermission, PaymentPermission, PermissionRow } from "./permission-cards";
+import { ConsentPermissions } from "./consent-permissions";
 
 type Props = {
   authorizationId: string;
@@ -36,8 +33,6 @@ export function ConsentForm({
   denyAction,
 }: Props) {
   const app = clientDisplayName(client);
-  const hasRar = authorizationDetails.length > 0;
-  const scopes = orderedScopes(newScopes);
 
   return (
     <Card className="w-full max-w-lg">
@@ -51,26 +46,7 @@ export function ConsentForm({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {authorizationDetails.map((el, i) =>
-          isPaymentType(String(el.type)) ? (
-            <PaymentPermission key={i} el={el} />
-          ) : (
-            <DataPermission key={i} el={el} />
-          ),
-        )}
-
-        {scopes.length > 0 && (
-          <div className={cn("space-y-3", hasRar && "border-t pt-4")}>
-            {scopes.map((s) => (
-              <PermissionRow
-                key={s.name}
-                Icon={scopeIcon(s.name)}
-                title={s.label}
-                description={s.description}
-              />
-            ))}
-          </div>
-        )}
+        <ConsentPermissions scopes={newScopes} authorizationDetails={authorizationDetails} />
 
         {(client.policy_uri || client.tos_uri) && (
           <p className="pt-1 text-xs text-muted-foreground">

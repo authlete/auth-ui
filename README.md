@@ -76,7 +76,7 @@ Most files in this repo are **managed** — installed from the [better-auth-ui](
 | `src/components/auth/`, `src/components/ui/` | **Managed** — registry-installed; don't hand-edit, update by re-installing |
 | `src/lib/auth/` | Mixed — registry plugins + a few owned hooks |
 | `src/brand/` | **Owned** — the white-label surface (see below) |
-| everything else in `src/` | **Owned** — Better Auth config, email transport, and the AS interaction protocol (`lib/jws`, `lib/jwks`, `lib/as-client`, `app/authorizations`, `app/apps`, `app/api/users`) |
+| everything else in `src/` | **Owned** — Better Auth config, email transport, and the AS interaction protocol (`lib/jws`, `lib/jwks`, `lib/as-client`, `app/authorizations`, `app/apps`, `app/(authentication-device)`, `app/api/users`) |
 
 Update managed code by re-installing, never by editing:
 
@@ -110,6 +110,11 @@ Beyond the auth/consent transaction, auth-ui also renders a **connected-apps** s
 - `GET    /api/authorized-apps` — list a user's granted apps (auth-ui → AS)
 - `DELETE /api/authorized-apps/{clientId}` — revoke an app's access (auth-ui → AS)
 
+Decoupled sign-in (no browser redirect) reuses the same login + consent, reached two ways:
+
+- **CIBA** — the AS pushes a pending request to auth-ui (`POST /ciba/requests`, AS → auth-ui); the user approves at `/requests`; auth-ui reports via `POST /api/backchannel/outcome` (auth-ui → AS).
+- **Device flow** (RFC 8628) — the user enters a `user_code` at `/device`; auth-ui resolves it (`POST /api/device/verification`) and reports the outcome (`POST /api/device/outcome`), both auth-ui → AS.
+
 **Why:** the AS stays implementation-portable (Node service, sidecar, gateway, edge worker), while authentication (MFA, passkeys, federation) and consent (per-claim, RAR, grant management) evolve entirely in auth-ui — none of which the AS ever sees.
 
 ## Roadmap
@@ -118,6 +123,7 @@ Supported today:
 
 - From the registry: email/password, email verification, password reset, multi-account device sessions, **TOTP 2FA + backup codes**, env-gated **social / OIDC sign-in** (Google, Microsoft, …).
 - Consent: **RAR consent capture** (renders `authorization_details`) and a **connected-apps panel** (`/apps`) to review and revoke granted access.
+- Decoupled sign-in: **CIBA** (pushed approvals at `/requests`) and the **Device Authorization Grant** (RFC 8628 — enter a code at `/device`), both reusing the same login + consent.
 
 Planned:
 

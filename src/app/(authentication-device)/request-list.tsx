@@ -1,14 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import {
-  DataPermission,
-  PaymentPermission,
-  PermissionRow,
-} from "@/components/authorization/permission-cards";
-import { isPaymentType, orderedScopes } from "@/lib/consent-labels";
-import { scopeIcon } from "@/lib/scope-icons";
-import { cn } from "@/lib/utils";
+import { ConsentPermissions } from "@/components/authorization/consent-permissions";
 import { approveRequest, denyRequest } from "./actions";
 import { Expiry } from "./expiry";
 import type { PendingRequest } from "./store";
@@ -22,7 +15,7 @@ export function RequestList({ requests }: { requests: PendingRequest[] }) {
     <div className="space-y-4">
       {requests.map((req) => {
         const rar = req.authorization_details ?? [];
-        const scopes = orderedScopes(req.scopes);
+        const hasBody = rar.length > 0 || req.scopes.length > 0;
         return (
           <Card key={req.ticket}>
             <CardHeader>
@@ -49,28 +42,9 @@ export function RequestList({ requests }: { requests: PendingRequest[] }) {
               </div>
             </CardHeader>
 
-            {(rar.length > 0 || scopes.length > 0) && (
+            {hasBody && (
               <CardContent className="space-y-4">
-                {rar.map((el, i) =>
-                  isPaymentType(String(el.type)) ? (
-                    <PaymentPermission key={i} el={el} />
-                  ) : (
-                    <DataPermission key={i} el={el} />
-                  ),
-                )}
-
-                {scopes.length > 0 && (
-                  <div className={cn("space-y-3", rar.length > 0 && "border-t pt-4")}>
-                    {scopes.map((s) => (
-                      <PermissionRow
-                        key={s.name}
-                        Icon={scopeIcon(s.name)}
-                        title={s.label}
-                        description={s.description}
-                      />
-                    ))}
-                  </div>
-                )}
+                <ConsentPermissions scopes={req.scopes} authorizationDetails={rar} />
               </CardContent>
             )}
 
